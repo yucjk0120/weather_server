@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>気象ステーション</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#333}
+header{background:#1a73e8;color:#fff;padding:12px 16px;display:flex;align-items:center;gap:8px}
+header h1{font-size:1.1rem;font-weight:600}
+.status{width:8px;height:8px;border-radius:50%;background:#4caf50;flex-shrink:0}
+.status.offline{background:#f44336}
+.current{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;padding:12px 16px}
+.card{background:#fff;border-radius:8px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card .label{font-size:.7rem;color:#888;text-transform:uppercase;letter-spacing:.5px}
+.card .value{font-size:1.5rem;font-weight:700;margin-top:2px}
+.card .unit{font-size:.8rem;color:#666;font-weight:400}
+.charts{padding:0 16px 16px}
+.chart-box{background:#fff;border-radius:8px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.chart-box h2{font-size:.85rem;color:#555;margin-bottom:8px}
+canvas{width:100%!important;height:200px!important}
+.time-info{text-align:center;padding:4px;font-size:.7rem;color:#999}
+</style>
+</head>
+<body>
+<header>
+  <div class="status" id="statusDot"></div>
+  <h1>気象ステーション</h1>
+</header>
+
+<div class="current" id="currentCards">
+  <div class="card"><div class="label">気温</div><div class="value" id="cur-temp">--<span class="unit"> °C</span></div></div>
+  <div class="card"><div class="label">湿度</div><div class="value" id="cur-hum">--<span class="unit"> %</span></div></div>
+  <div class="card"><div class="label">雨量</div><div class="value" id="cur-rain">--<span class="unit"> mm/h</span></div></div>
+  <div class="card"><div class="label">風速</div><div class="value" id="cur-wind">--<span class="unit"> m/s</span></div></div>
+  <div class="card"><div class="label">風向</div><div class="value" id="cur-dir">--<span class="unit"> °</span></div></div>
+  <div class="card"><div class="label">照度</div><div class="value" id="cur-lux">--<span class="unit"> lux</span></div></div>
+  <div class="card"><div class="label">UV指数</div><div class="value" id="cur-uv">--</div></div>
+</div>
+
+<div class="time-info" id="timeInfo">データなし</div>
+
+<div class="charts">
+  <div class="chart-box"><h2>気温・湿度</h2><canvas id="chartTempHum"></canvas></div>
+  <div class="chart-box"><h2>雨量</h2><canvas id="chartRain"></canvas></div>
+  <div class="chart-box"><h2>風速</h2><canvas id="chartWind"></canvas></div>
+  <div class="chart-box"><h2>照度・UV</h2><canvas id="chartLight"></canvas></div>
+</div>
+
+<script>
+const ts = v => new Date(v * 1000);
+const fmt = v => v != null ? v.toFixed(1) : '--';
+
+// --- 現在値パネル更新 ---
+function updateCurrent(r) {
+  document.getElementById('cur-temp').innerHTML = fmt(r.temperature) + '<span class="unit"> °C</span>';
+  document.getElementById('cur-hum').innerHTML = fmt(r.humidity) + '<span class="unit"> %</span>';
+  document.getElementById('cur-rain').innerHTML = fmt(r.rainfall_rate) + '<span class="unit"> mm/h</span>';
+  document.getElementById('cur-wind').innerHTML = fmt(r.wind_avg) + '<span class="unit"> m/s</span>';
+  document.getElementById('cur-dir').innerHTML = fmt(r.wind_dir) + '<span class="unit"> °</span>';
+  document.getElementById('cur-lux').innerHTML = (r.illuminance != null ? Math.round(r.illuminance) : '--') + '<span class="unit"> lux</span>';
+  document.getElementById('cur-uv').innerHTML = fmt(r.uv_index);
+  document.getElementById('timeInfo').textContent = '最終更新: ' + ts(r.recorded_at).toLocaleString('ja-JP');
+}
+
+// --- Chart.js 共通設定 ---
+const commonOpts = (yLabel) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: false,
+  interaction: { mode: 'index', intersect: false },
+  scales: {
+    x: { type: 'time', time: { tooltipFormat: 'HH:mm:ss', displayFormats: { minute: 'HH:mm', hour: 'HH:mm' } }, ticks: { maxTicksLimit: 6, font: { size: 10 } } },
+    y: { title: { display: true, text: yLabel, font: { size: 10 } }, ticks: { font: { size: 10 } } }
+  },
+  plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } },
+  elements: { point: { radius: 0 }, line: { borderWidth: 1.5 } }
+});
+
+const mkDataset = (label, color, yAxisID) => ({ label, borderColor: color, backgroundColor: color + '20', data: [], fill: false, yAxisID });
+
+// --- グラフ初期化 ---
+// 気温・湿度（2軸）
+const chartTH = new Chart(document.getElementById('chartTempHum'), {
+  type: 'line',
+  data: { datasets: [
+    mkDataset('気温 (°C)', '#e53935', 'y'),
+    mkDataset('湿度 (%)', '#1e88e5', 'y1'),
+  ]},
+  options: {
+    ...commonOpts('°C'),
+    scales: {
+      ...commonOpts('°C').scales,
+      y1: { position: 'right', title: { display: true, text: '%', font: { size: 10 } }, ticks: { font: { size: 10 } }, grid: { drawOnChartArea: false } }
+    }
+  }
+});
+
+// 雨量
+const chartRain = new Chart(document.getElementById('chartRain'), {
+  type: 'line',
+  data: { datasets: [
+    { ...mkDataset('雨量 (mm/h)', '#00897b', 'y'), fill: true },
+  ]},
+  options: commonOpts('mm/h')
+});
+
+// 風速
+const chartWind = new Chart(document.getElementById('chartWind'), {
+  type: 'line',
+  data: { datasets: [
+    mkDataset('平均 (m/s)', '#43a047', 'y'),
+    mkDataset('瞬間最大 (m/s)', '#fb8c00', 'y'),
+  ]},
+  options: commonOpts('m/s')
+});
+
+// 照度・UV（2軸）
+const chartLight = new Chart(document.getElementById('chartLight'), {
+  type: 'line',
+  data: { datasets: [
+    mkDataset('照度 (lux)', '#fdd835', 'y'),
+    mkDataset('UV指数', '#8e24aa', 'y1'),
+  ]},
+  options: {
+    ...commonOpts('lux'),
+    scales: {
+      ...commonOpts('lux').scales,
+      y1: { position: 'right', title: { display: true, text: 'UV', font: { size: 10 } }, ticks: { font: { size: 10 } }, grid: { drawOnChartArea: false } }
+    }
+  }
+});
+
+function pushPoint(r) {
+  const t = ts(r.recorded_at);
+  chartTH.data.datasets[0].data.push({ x: t, y: r.temperature });
+  chartTH.data.datasets[1].data.push({ x: t, y: r.humidity });
+  chartRain.data.datasets[0].data.push({ x: t, y: r.rainfall_rate });
+  chartWind.data.datasets[0].data.push({ x: t, y: r.wind_avg });
+  chartWind.data.datasets[1].data.push({ x: t, y: r.wind_gust });
+  chartLight.data.datasets[0].data.push({ x: t, y: r.illuminance });
+  chartLight.data.datasets[1].data.push({ x: t, y: r.uv_index });
+}
+
+function updateCharts() {
+  chartTH.update();
+  chartRain.update();
+  chartWind.update();
+  chartLight.update();
+}
+
+// --- 初期データ読み込み ---
+fetch('/api/weather/latest?limit=120')
+  .then(r => r.json())
+  .then(data => {
+    if (!data.length) return;
+    data.forEach(pushPoint);
+    updateCurrent(data[data.length - 1]);
+    updateCharts();
+  });
+
+// --- SSE リアルタイム更新 ---
+const dot = document.getElementById('statusDot');
+
+function connectSSE() {
+  const es = new EventSource('/api/weather/stream');
+  es.addEventListener('weather', e => {
+    const r = JSON.parse(e.data);
+    pushPoint(r);
+    updateCurrent(r);
+    updateCharts();
+    // 古いポイントを削除（画面上120件保持）
+    [chartTH, chartRain, chartWind, chartLight].forEach(c => {
+      c.data.datasets.forEach(ds => { if (ds.data.length > 120) ds.data.shift(); });
+    });
+  });
+  es.onopen = () => { dot.classList.remove('offline'); };
+  es.onerror = () => {
+    dot.classList.add('offline');
+    es.close();
+    setTimeout(connectSSE, 5000);
+  };
+}
+connectSSE();
+</script>
+</body>
+</html>

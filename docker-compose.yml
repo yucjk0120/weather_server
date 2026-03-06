@@ -1,0 +1,8 @@
+services:
+  weather-server:
+    build: .
+    ports:
+      - "8765:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
