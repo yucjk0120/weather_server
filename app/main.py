@@ -90,23 +90,57 @@ async def post_weather(data: WeatherInput):
 
 
 @app.get("/api/weather/latest")
-async def get_latest(limit: int = Query(default=120, ge=1, le=10000)):
+async def get_latest(
+    since: float | None = Query(default=None, description="開始Unix timestamp"),
+    limit: int = Query(default=120, ge=1, le=100000),
+    max_points: int = Query(default=600, ge=1, le=5000, description="最大返却件数（間引き）"),
+):
     db = await get_db()
     try:
-        cursor = await db.execute(
-            """
-            SELECT * FROM weather_records
-            ORDER BY recorded_at DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
+        if since is not None:
+            # 時間範囲指定: since 以降の全データを取得し間引く
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM weather_records WHERE recorded_at >= ?",
+                (since,),
+            )
+            (total,) = await cursor.fetchone()
+
+            step = max(1, total // max_points)
+            cursor = await db.execute(
+                """
+                SELECT * FROM (
+                    SELECT *, ROW_NUMBER() OVER (ORDER BY recorded_at) AS rn
+                    FROM weather_records
+                    WHERE recorded_at >= ?
+                ) WHERE rn % ? = 1 OR rn = (
+                    SELECT COUNT(*) FROM weather_records WHERE recorded_at >= ?
+                )
+                ORDER BY recorded_at
+                """,
+                (since, step, since),
+            )
+        else:
+            # 従来互換: limit 件取得
+            cursor = await db.execute(
+                """
+                SELECT * FROM weather_records
+                ORDER BY recorded_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+
         rows = await cursor.fetchall()
     finally:
         await db.close()
 
-    # 古い順に返す（グラフ描画用）
-    return [dict(r) for r in reversed(rows)]
+    records = [dict(r) for r in rows]
+    # rn 列を除去 & 古い順ソート
+    for rec in records:
+        rec.pop("rn", None)
+    if since is None:
+        records.reverse()
+    return records
 
 
 @app.get("/api/weather/stream")

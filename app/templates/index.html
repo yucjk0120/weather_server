@@ -18,6 +18,10 @@ header h1{font-size:1.1rem;font-weight:600}
 .card .label{font-size:.7rem;color:#888;text-transform:uppercase;letter-spacing:.5px}
 .card .value{font-size:1.5rem;font-weight:700;margin-top:2px}
 .card .unit{font-size:.8rem;color:#666;font-weight:400}
+.range-bar{display:flex;gap:4px;padding:8px 16px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.range-bar button{flex-shrink:0;padding:6px 12px;border:1px solid #ddd;border-radius:16px;background:#fff;font-size:.75rem;color:#555;cursor:pointer;transition:all .15s}
+.range-bar button.active{background:#1a73e8;color:#fff;border-color:#1a73e8}
+.range-bar button:hover:not(.active){background:#e8f0fe}
 .charts{padding:0 16px 16px}
 .chart-box{background:#fff;border-radius:8px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .chart-box h2{font-size:.85rem;color:#555;margin-bottom:8px}
@@ -41,6 +45,17 @@ canvas{width:100%!important;height:200px!important}
   <div class="card"><div class="label">UV指数</div><div class="value" id="cur-uv">--</div></div>
 </div>
 
+<div class="range-bar" id="rangeBar">
+  <button data-hours="6">6時間</button>
+  <button data-hours="12">12時間</button>
+  <button data-hours="24" class="active">24時間</button>
+  <button data-hours="48">48時間</button>
+  <button data-hours="72">72時間</button>
+  <button data-hours="168">7日間</button>
+  <button data-hours="336">14日間</button>
+  <button data-hours="744">1ヶ月</button>
+</div>
+
 <div class="time-info" id="timeInfo">データなし</div>
 
 <div class="charts">
@@ -53,6 +68,8 @@ canvas{width:100%!important;height:200px!important}
 <script>
 const ts = v => new Date(v * 1000);
 const fmt = v => v != null ? v.toFixed(1) : '--';
+const allCharts = [];
+let currentRangeHours = 24;
 
 // --- 現在値パネル更新 ---
 function updateCurrent(r) {
@@ -67,13 +84,19 @@ function updateCurrent(r) {
 }
 
 // --- Chart.js 共通設定 ---
+function timeDisplayFormats(hours) {
+  if (hours <= 24)  return { minute: 'HH:mm', hour: 'HH:mm' };
+  if (hours <= 72)  return { hour: 'M/d HH:mm', day: 'M/d' };
+  return { day: 'M/d', hour: 'M/d' };
+}
+
 const commonOpts = (yLabel) => ({
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
   interaction: { mode: 'index', intersect: false },
   scales: {
-    x: { type: 'time', time: { tooltipFormat: 'HH:mm:ss', displayFormats: { minute: 'HH:mm', hour: 'HH:mm' } }, ticks: { maxTicksLimit: 6, font: { size: 10 } } },
+    x: { type: 'time', time: { tooltipFormat: 'yyyy/MM/dd HH:mm:ss', displayFormats: timeDisplayFormats(currentRangeHours) }, ticks: { maxTicksLimit: 6, font: { size: 10 } } },
     y: { title: { display: true, text: yLabel, font: { size: 10 } }, ticks: { font: { size: 10 } } }
   },
   plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } },
@@ -83,7 +106,6 @@ const commonOpts = (yLabel) => ({
 const mkDataset = (label, color, yAxisID) => ({ label, borderColor: color, backgroundColor: color + '20', data: [], fill: false, yAxisID });
 
 // --- グラフ初期化 ---
-// 気温・湿度（2軸）
 const chartTH = new Chart(document.getElementById('chartTempHum'), {
   type: 'line',
   data: { datasets: [
@@ -99,7 +121,6 @@ const chartTH = new Chart(document.getElementById('chartTempHum'), {
   }
 });
 
-// 雨量
 const chartRain = new Chart(document.getElementById('chartRain'), {
   type: 'line',
   data: { datasets: [
@@ -108,7 +129,6 @@ const chartRain = new Chart(document.getElementById('chartRain'), {
   options: commonOpts('mm/h')
 });
 
-// 風速
 const chartWind = new Chart(document.getElementById('chartWind'), {
   type: 'line',
   data: { datasets: [
@@ -118,7 +138,6 @@ const chartWind = new Chart(document.getElementById('chartWind'), {
   options: commonOpts('m/s')
 });
 
-// 照度・UV（2軸）
 const chartLight = new Chart(document.getElementById('chartLight'), {
   type: 'line',
   data: { datasets: [
@@ -134,6 +153,13 @@ const chartLight = new Chart(document.getElementById('chartLight'), {
   }
 });
 
+allCharts.push(chartTH, chartRain, chartWind, chartLight);
+
+// --- データ操作 ---
+function clearCharts() {
+  allCharts.forEach(c => c.data.datasets.forEach(ds => { ds.data = []; }));
+}
+
 function pushPoint(r) {
   const t = ts(r.recorded_at);
   chartTH.data.datasets[0].data.push({ x: t, y: r.temperature });
@@ -145,22 +171,42 @@ function pushPoint(r) {
   chartLight.data.datasets[1].data.push({ x: t, y: r.uv_index });
 }
 
-function updateCharts() {
-  chartTH.update();
-  chartRain.update();
-  chartWind.update();
-  chartLight.update();
+function updateTimeFormats(hours) {
+  const df = timeDisplayFormats(hours);
+  allCharts.forEach(c => { c.options.scales.x.time.displayFormats = df; });
 }
 
+function updateCharts() {
+  allCharts.forEach(c => c.update());
+}
+
+// --- データ取得 ---
+function loadData(hours) {
+  currentRangeHours = hours;
+  const since = Date.now() / 1000 - hours * 3600;
+  clearCharts();
+  updateTimeFormats(hours);
+  fetch(`/api/weather/latest?since=${since}&max_points=600`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.length) return;
+      data.forEach(pushPoint);
+      updateCurrent(data[data.length - 1]);
+      updateCharts();
+    });
+}
+
+// --- 範囲切替ボタン ---
+document.getElementById('rangeBar').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  document.querySelectorAll('#rangeBar button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadData(parseInt(btn.dataset.hours));
+});
+
 // --- 初期データ読み込み ---
-fetch('/api/weather/latest?limit=120')
-  .then(r => r.json())
-  .then(data => {
-    if (!data.length) return;
-    data.forEach(pushPoint);
-    updateCurrent(data[data.length - 1]);
-    updateCharts();
-  });
+loadData(currentRangeHours);
 
 // --- SSE リアルタイム更新 ---
 const dot = document.getElementById('statusDot');
@@ -169,13 +215,18 @@ function connectSSE() {
   const es = new EventSource('/api/weather/stream');
   es.addEventListener('weather', e => {
     const r = JSON.parse(e.data);
-    pushPoint(r);
+    // 現在値は常に更新
     updateCurrent(r);
-    updateCharts();
-    // 古いポイントを削除（画面上120件保持）
-    [chartTH, chartRain, chartWind, chartLight].forEach(c => {
-      c.data.datasets.forEach(ds => { if (ds.data.length > 120) ds.data.shift(); });
-    });
+    // 選択範囲内のデータならグラフにも追加
+    const since = Date.now() / 1000 - currentRangeHours * 3600;
+    if (r.recorded_at >= since) {
+      pushPoint(r);
+      // 古いポイントをトリミング（600件上限）
+      allCharts.forEach(c => {
+        c.data.datasets.forEach(ds => { if (ds.data.length > 600) ds.data.shift(); });
+      });
+      updateCharts();
+    }
   });
   es.onopen = () => { dot.classList.remove('offline'); };
   es.onerror = () => {
