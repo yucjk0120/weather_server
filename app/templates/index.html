@@ -83,20 +83,73 @@ function updateCurrent(r) {
   document.getElementById('timeInfo').textContent = '最終更新: ' + ts(r.recorded_at).toLocaleString('ja-JP');
 }
 
-// --- Chart.js 共通設定 ---
-function timeDisplayFormats(hours) {
-  if (hours <= 24)  return { minute: 'HH:mm', hour: 'HH:mm' };
-  if (hours <= 72)  return { hour: 'M/d HH:mm', day: 'M/d' };
-  return { day: 'M/d', hour: 'M/d' };
+// =============================================
+// 範囲別 時間軸設定テーブル
+// unit/step   : グリッド線の間隔
+// mStep       : モバイル時のグリッド間隔
+// hourLabels  : true=正時のみラベル表示（サブ刻みは縦線のみ）
+// labelFmt    : ラベル表示フォーマット
+// tipFmt      : ツールチップフォーマット
+// =============================================
+const RANGE_AXIS = {
+  6:   { unit:'minute', step:15,  mStep:30,  hourLabels:true,  labelFmt:'HH:mm',      tipFmt:'yyyy/MM/dd HH:mm:ss' },
+  12:  { unit:'minute', step:15,  mStep:30,  hourLabels:true,  labelFmt:'HH:mm',      tipFmt:'yyyy/MM/dd HH:mm:ss' },
+  24:  { unit:'minute', step:30,  mStep:60,  hourLabels:true,  labelFmt:'HH:mm',      tipFmt:'yyyy/MM/dd HH:mm:ss' },
+  48:  { unit:'hour',   step:3,   mStep:6,   hourLabels:false, labelFmt:'M/d HH:mm',  tipFmt:'yyyy/MM/dd HH:mm' },
+  72:  { unit:'hour',   step:6,   mStep:12,  hourLabels:false, labelFmt:'M/d HH:mm',  tipFmt:'yyyy/MM/dd HH:mm' },
+  168: { unit:'hour',   step:12,  mStep:24,  hourLabels:false, labelFmt:'M/d HH:mm',  tipFmt:'yyyy/MM/dd HH:mm' },
+  336: { unit:'day',    step:1,   mStep:2,   hourLabels:false, labelFmt:'M/d',         tipFmt:'yyyy/MM/dd' },
+  744: { unit:'day',    step:2,   mStep:4,   hourLabels:false, labelFmt:'M/d',         tipFmt:'yyyy/MM/dd' },
+};
+
+function getAxisCfg(hours) {
+  return RANGE_AXIS[hours] || RANGE_AXIS[24];
 }
 
+function isMobile() { return window.innerWidth < 500; }
+
+// step(unit単位) → 分に変換
+function stepToMin(cfg, step) {
+  if (cfg.unit === 'hour') return step * 60;
+  if (cfg.unit === 'day')  return step * 1440;
+  return step; // minute
+}
+
+// ローカル時刻を stepMin 分単位の正時境界に丸める
+function alignTime(ms, stepMin, roundUp) {
+  const d = new Date(ms);
+  if (stepMin >= 1440) {
+    // 日単位: 午前0時に揃える
+    d.setHours(0, 0, 0, 0);
+    if (roundUp && d.getTime() < ms) d.setDate(d.getDate() + 1);
+    return d.getTime();
+  }
+  const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const elapsed = (ms - dayStart) / 60000;
+  const aligned = roundUp
+    ? Math.ceil(elapsed / stepMin) * stepMin
+    : Math.floor(elapsed / stepMin) * stepMin;
+  return dayStart + aligned * 60000;
+}
+
+// --- Chart.js 共通設定 ---
 const commonOpts = (yLabel) => ({
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
   interaction: { mode: 'index', intersect: false },
   scales: {
-    x: { type: 'time', time: { tooltipFormat: 'yyyy/MM/dd HH:mm:ss', displayFormats: timeDisplayFormats(currentRangeHours) }, ticks: { maxTicksLimit: 6, font: { size: 10 } } },
+    x: {
+      type: 'time',
+      time: {
+        unit: 'minute',
+        stepSize: 30,
+        tooltipFormat: 'yyyy/MM/dd HH:mm:ss',
+        displayFormats: { minute: 'HH:mm', hour: 'HH:mm', day: 'M/d' }
+      },
+      ticks: { autoSkip: false, maxRotation: 0, font: { size: 10 } },
+      grid: { color: '#e0e0e0' }
+    },
     y: { title: { display: true, text: yLabel, font: { size: 10 } }, ticks: { font: { size: 10 } } }
   },
   plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } },
@@ -155,6 +208,48 @@ const chartLight = new Chart(document.getElementById('chartLight'), {
 
 allCharts.push(chartTH, chartRain, chartWind, chartLight);
 
+// --- 時間軸を範囲に合わせて再設定 ---
+function applyTimeAxis(hours) {
+  const cfg = getAxisCfg(hours);
+  const step = isMobile() ? cfg.mStep : cfg.step;
+  const sMin = stepToMin(cfg, step);
+
+  // min/max を正時境界に揃えて固定幅を確保
+  const now = Date.now();
+  const axisMax = alignTime(now, sMin, true);
+  const axisMin = alignTime(now - hours * 3600000, sMin, false);
+
+  // 正時ラベル + サブ刻み縦線モード用コールバック
+  const labelCb = cfg.hourLabels
+    ? function(value, index, ticks) {
+        const d = new Date(ticks[index].value);
+        return d.getMinutes() === 0 ? value : '';
+      }
+    : undefined;   // 全ティックにラベル表示
+
+  const gridColorCb = cfg.hourLabels
+    ? function(ctx) {
+        if (!ctx.tick) return '#e0e0e0';
+        const d = new Date(ctx.tick.value);
+        return d.getMinutes() === 0 ? '#ccc' : '#eaeaea';
+      }
+    : '#e0e0e0';
+
+  const fmtObj = { minute: cfg.labelFmt, hour: cfg.labelFmt, day: cfg.labelFmt };
+
+  allCharts.forEach(c => {
+    const x = c.options.scales.x;
+    x.min = axisMin;
+    x.max = axisMax;
+    x.time.unit = cfg.unit;
+    x.time.stepSize = step;
+    x.time.tooltipFormat = cfg.tipFmt;
+    x.time.displayFormats = fmtObj;
+    x.ticks.callback = labelCb;
+    x.grid.color = gridColorCb;
+  });
+}
+
 // --- データ操作 ---
 function clearCharts() {
   allCharts.forEach(c => c.data.datasets.forEach(ds => { ds.data = []; }));
@@ -171,11 +266,6 @@ function pushPoint(r) {
   chartLight.data.datasets[1].data.push({ x: t, y: r.uv_index });
 }
 
-function updateTimeFormats(hours) {
-  const df = timeDisplayFormats(hours);
-  allCharts.forEach(c => { c.options.scales.x.time.displayFormats = df; });
-}
-
 function updateCharts() {
   allCharts.forEach(c => c.update());
 }
@@ -185,7 +275,7 @@ function loadData(hours) {
   currentRangeHours = hours;
   const since = Date.now() / 1000 - hours * 3600;
   clearCharts();
-  updateTimeFormats(hours);
+  applyTimeAxis(hours);
   fetch(`/api/weather/latest?since=${since}&max_points=600`)
     .then(r => r.json())
     .then(data => {
@@ -205,6 +295,16 @@ document.getElementById('rangeBar').addEventListener('click', e => {
   loadData(parseInt(btn.dataset.hours));
 });
 
+// --- レスポンシブ: 画面幅変更時に軸を再計算 ---
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    applyTimeAxis(currentRangeHours);
+    updateCharts();
+  }, 300);
+});
+
 // --- 初期データ読み込み ---
 loadData(currentRangeHours);
 
@@ -215,18 +315,27 @@ function connectSSE() {
   const es = new EventSource('/api/weather/stream');
   es.addEventListener('weather', e => {
     const r = JSON.parse(e.data);
-    // 現在値は常に更新
     updateCurrent(r);
-    // 選択範囲内のデータならグラフにも追加
-    const since = Date.now() / 1000 - currentRangeHours * 3600;
-    if (r.recorded_at >= since) {
+    // 軸ウィンドウをスライド
+    const cfg = getAxisCfg(currentRangeHours);
+    const step = isMobile() ? cfg.mStep : cfg.step;
+    const sMin = stepToMin(cfg, step);
+    const now = Date.now();
+    const axisMax = alignTime(now, sMin, true);
+    const axisMin = alignTime(now - currentRangeHours * 3600000, sMin, false);
+    allCharts.forEach(c => {
+      const x = c.options.scales.x;
+      x.min = axisMin;
+      x.max = axisMax;
+    });
+    // 範囲内ならグラフに追加
+    if (r.recorded_at * 1000 >= axisMin) {
       pushPoint(r);
-      // 古いポイントをトリミング（600件上限）
       allCharts.forEach(c => {
         c.data.datasets.forEach(ds => { if (ds.data.length > 600) ds.data.shift(); });
       });
-      updateCharts();
     }
+    updateCharts();
   });
   es.onopen = () => { dot.classList.remove('offline'); };
   es.onerror = () => {
