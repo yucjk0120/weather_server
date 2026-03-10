@@ -99,7 +99,8 @@ canvas{width:100%!important;height:200px!important}
 </div>
 
 <div class="charts">
-  <div class="chart-box"><h2>気温・湿度</h2><canvas id="chartTempHum"></canvas></div>
+  <div class="chart-box"><h2>気温</h2><canvas id="chartTemp"></canvas></div>
+  <div class="chart-box"><h2>湿度</h2><canvas id="chartHum"></canvas></div>
   <div class="chart-box"><h2>雨量</h2><canvas id="chartRain"></canvas></div>
   <div class="chart-box"><h2>風速</h2><canvas id="chartWind"></canvas></div>
   <div class="chart-box"><h2>風向</h2><canvas id="chartWindDir"></canvas></div>
@@ -236,18 +237,48 @@ const commonOpts = (yLabel) => ({
 
 const mkDataset = (label, color, yAxisID) => ({ label, borderColor: color, backgroundColor: color + '20', data: [], fill: false, yAxisID });
 
+// --- Y軸グリッド強調ヘルパー ---
+// majorStep 毎に強調線、extraZero=true なら 0 を更に強調
+function yGridColor(majorStep, extraZero) {
+  return function(ctx) {
+    if (!ctx.tick) return '#e0e0e0';
+    const v = ctx.tick.value;
+    if (extraZero && v === 0) return 'rgba(0,0,200,0.6)';
+    if (v % majorStep === 0) return 'rgba(0,0,0,0.3)';
+    return '#e0e0e0';
+  };
+}
+function yGridWidth(majorStep, extraZero) {
+  return function(ctx) {
+    if (!ctx.tick) return 0.5;
+    const v = ctx.tick.value;
+    if (extraZero && v === 0) return 2;
+    if (v % majorStep === 0) return 1.5;
+    return 0.5;
+  };
+}
+
 // --- グラフ初期化 ---
-const chartTH = new Chart(document.getElementById('chartTempHum'), {
+const chartTemp = new Chart(document.getElementById('chartTemp'), {
   type: 'line',
-  data: { datasets: [
-    mkDataset('気温 (°C)', '#e53935', 'y'),
-    mkDataset('湿度 (%)', '#1e88e5', 'y1'),
-  ]},
+  data: { datasets: [ mkDataset('気温 (°C)', '#e53935', 'y') ]},
   options: {
     ...commonOpts('°C'),
     scales: {
       ...commonOpts('°C').scales,
-      y1: { position: 'right', title: { display: true, text: '%', font: { size: 10 } }, ticks: { font: { size: 10 } }, grid: { drawOnChartArea: false } }
+      y: { ...commonOpts('°C').scales.y, grid: { color: yGridColor(10, true), lineWidth: yGridWidth(10, true) } }
+    }
+  }
+});
+
+const chartHum = new Chart(document.getElementById('chartHum'), {
+  type: 'line',
+  data: { datasets: [ mkDataset('湿度 (%)', '#1e88e5', 'y') ]},
+  options: {
+    ...commonOpts('%'),
+    scales: {
+      ...commonOpts('%').scales,
+      y: { ...commonOpts('%').scales.y, grid: { color: yGridColor(10, false), lineWidth: yGridWidth(10, false) } }
     }
   }
 });
@@ -262,7 +293,7 @@ const chartRain = new Chart(document.getElementById('chartRain'), {
     ...commonOpts('mm'),
     scales: {
       ...commonOpts('mm').scales,
-      y: { ...commonOpts('mm').scales.y, min: 0, suggestedMax: 5 }
+      y: { ...commonOpts('mm').scales.y, min: 0, suggestedMax: 5, grid: { color: yGridColor(10, false), lineWidth: yGridWidth(10, false) } }
     }
   }
 });
@@ -289,19 +320,40 @@ const chartUV = new Chart(document.getElementById('chartUV'), {
   data: { datasets: [
     mkDataset('UV指数', '#8e24aa', 'y'),
   ]},
-  options: commonOpts('UV')
+  options: {
+    ...commonOpts('UV'),
+    scales: {
+      ...commonOpts('UV').scales,
+      y: { ...commonOpts('UV').scales.y, grid: { color: yGridColor(1, false), lineWidth: yGridWidth(1, false) } }
+    }
+  }
 });
 
 const chartWindDir = new Chart(document.getElementById('chartWindDir'), {
   type: 'scatter',
-  data: { datasets: [{
-    label: '風向',
-    borderColor: '#5c6bc0',
-    backgroundColor: '#5c6bc0',
-    data: [],
-    pointRadius: 2,
-    pointHoverRadius: 4,
-  }]},
+  data: { datasets: [
+    {
+      label: '風向',
+      borderColor: '#5c6bc0',
+      backgroundColor: '#5c6bc0',
+      data: [],
+      pointRadius: 2,
+      pointHoverRadius: 4,
+      order: 2,
+    },
+    {
+      label: '傾向',
+      type: 'line',
+      borderColor: 'rgba(255,87,34,0.7)',
+      backgroundColor: 'transparent',
+      data: [],
+      pointRadius: 0,
+      borderWidth: 2,
+      tension: 0.3,
+      fill: false,
+      order: 1,
+    }
+  ]},
   options: {
     ...commonOpts(''),
     interaction: { mode: 'nearest', intersect: false },
@@ -321,7 +373,7 @@ const chartWindDir = new Chart(document.getElementById('chartWindDir'), {
   }
 });
 
-allCharts.push(chartTH, chartRain, chartWind, chartWindDir, chartLight, chartUV);
+allCharts.push(chartTemp, chartHum, chartRain, chartWind, chartWindDir, chartLight, chartUV);
 
 // --- 時間軸を範囲に合わせて再設定 ---
 function applyTimeAxis(hours) {
@@ -373,8 +425,8 @@ function pushPoint(r) {
   rainLastDay = day;
   if (r.rainfall_delta != null) rainAccum += r.rainfall_delta;
 
-  chartTH.data.datasets[0].data.push({ x: t, y: r.temperature });
-  chartTH.data.datasets[1].data.push({ x: t, y: r.humidity });
+  chartTemp.data.datasets[0].data.push({ x: t, y: r.temperature });
+  chartHum.data.datasets[0].data.push({ x: t, y: r.humidity });
   chartRain.data.datasets[0].data.push({ x: t, y: r.rainfall_rate });
   chartRain.data.datasets[1].data.push({ x: t, y: rainAccum });
   chartWind.data.datasets[0].data.push({ x: t, y: r.wind_avg });
@@ -384,7 +436,30 @@ function pushPoint(r) {
   chartUV.data.datasets[0].data.push({ x: t, y: r.uv_index });
 }
 
+// --- 風向トレンドライン（ベクトル移動平均） ---
+function updateWindDirTrend() {
+  const raw = chartWindDir.data.datasets[0].data;
+  if (raw.length < 5) { chartWindDir.data.datasets[1].data = []; return; }
+  const win = Math.max(5, Math.floor(raw.length / 30));
+  const trend = [];
+  for (let i = 0; i < raw.length; i++) {
+    let sinSum = 0, cosSum = 0, n = 0;
+    const lo = Math.max(0, i - win), hi = Math.min(raw.length - 1, i + win);
+    for (let j = lo; j <= hi; j++) {
+      const rad = raw[j].y * Math.PI / 180;
+      sinSum += Math.sin(rad);
+      cosSum += Math.cos(rad);
+      n++;
+    }
+    let avg = Math.atan2(sinSum / n, cosSum / n) * 180 / Math.PI;
+    if (avg < 0) avg += 360;
+    trend.push({ x: raw[i].x, y: avg });
+  }
+  chartWindDir.data.datasets[1].data = trend;
+}
+
 function updateCharts() {
+  updateWindDirTrend();
   allCharts.forEach(c => c.update());
 }
 
