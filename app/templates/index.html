@@ -26,7 +26,24 @@ header h1{font-size:1.1rem;font-weight:600}
 .chart-box{background:#fff;border-radius:8px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .chart-box h2{font-size:.85rem;color:#555;margin-bottom:8px}
 canvas{width:100%!important;height:200px!important}
+.nav-bar{display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 16px}
+.nav-btn{width:28px;height:28px;border:none;background:none;cursor:pointer;color:#555;font-size:0;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+.nav-btn::after{content:'';display:block;width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent}
+.nav-btn.back::after{border-right:10px solid #555}
+.nav-btn.fwd::after{border-left:10px solid #555}
+.nav-btn:disabled{opacity:.2;cursor:default}
+.nav-btn:not(:disabled):hover{opacity:.6}
+.nav-range{font-size:.8rem;color:#555;min-width:180px;text-align:center}
 .time-info{text-align:center;padding:4px;font-size:.7rem;color:#999}
+.extremes{padding:0 16px 12px}
+.extremes h2{font-size:.85rem;color:#555;margin-bottom:6px}
+.ext-table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);font-size:.78rem}
+.ext-table th,.ext-table td{padding:5px 8px;text-align:center;border-bottom:1px solid #eee}
+.ext-table th{background:#f5f7fa;color:#666;font-weight:600}
+.ext-table td:first-child{text-align:left;color:#555;font-weight:500}
+.ext-table tr:last-child td{border-bottom:none}
+.ext-table .hi{color:#e53935}
+.ext-table .lo{color:#1565c0}
 </style>
 </head>
 <body>
@@ -56,13 +73,38 @@ canvas{width:100%!important;height:200px!important}
   <button data-hours="744">1ヶ月</button>
 </div>
 
+<div class="nav-bar">
+  <button class="nav-btn back" id="navBack" aria-label="戻る"></button>
+  <span class="nav-range" id="navRange"></span>
+  <button class="nav-btn fwd" id="navFwd" aria-label="進む" disabled></button>
+</div>
 <div class="time-info" id="timeInfo">データなし</div>
+
+<div class="extremes">
+  <h2>極値一覧</h2>
+  <table class="ext-table" id="extTable">
+    <thead><tr><th></th><th id="extH0">今日</th><th id="extH1">昨日</th><th id="extH2">一昨日</th></tr></thead>
+    <tbody>
+      <tr><td>気温 最高</td><td class="hi" id="e00">--</td><td class="hi" id="e01">--</td><td class="hi" id="e02">--</td></tr>
+      <tr><td>気温 最低</td><td class="lo" id="e10">--</td><td class="lo" id="e11">--</td><td class="lo" id="e12">--</td></tr>
+      <tr><td>湿度 最高</td><td id="e20">--</td><td id="e21">--</td><td id="e22">--</td></tr>
+      <tr><td>湿度 最低</td><td id="e30">--</td><td id="e31">--</td><td id="e32">--</td></tr>
+      <tr><td>風速 最大</td><td id="e40">--</td><td id="e41">--</td><td id="e42">--</td></tr>
+      <tr><td>照度 最大</td><td id="e50">--</td><td id="e51">--</td><td id="e52">--</td></tr>
+      <tr><td>UV 最大</td><td id="e60">--</td><td id="e61">--</td><td id="e62">--</td></tr>
+      <tr><td>瞬間雨量 最大</td><td id="e70">--</td><td id="e71">--</td><td id="e72">--</td></tr>
+      <tr><td>24時間雨量</td><td id="e80">--</td><td id="e81">--</td><td id="e82">--</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <div class="charts">
   <div class="chart-box"><h2>気温・湿度</h2><canvas id="chartTempHum"></canvas></div>
   <div class="chart-box"><h2>雨量</h2><canvas id="chartRain"></canvas></div>
   <div class="chart-box"><h2>風速</h2><canvas id="chartWind"></canvas></div>
-  <div class="chart-box"><h2>照度・UV</h2><canvas id="chartLight"></canvas></div>
+  <div class="chart-box"><h2>風向</h2><canvas id="chartWindDir"></canvas></div>
+  <div class="chart-box"><h2>照度</h2><canvas id="chartLight"></canvas></div>
+  <div class="chart-box"><h2>UV指数</h2><canvas id="chartUV"></canvas></div>
 </div>
 
 <script>
@@ -70,6 +112,7 @@ const ts = v => new Date(v * 1000);
 const fmt = v => v != null ? v.toFixed(1) : '--';
 const allCharts = [];
 let currentRangeHours = 24;
+let timeOffset = 0; // ms, 0=現在, 負=過去
 
 // --- 現在値パネル更新 ---
 function updateCurrent(r) {
@@ -92,14 +135,14 @@ function updateCurrent(r) {
 // tipFmt      : ツールチップフォーマット
 // =============================================
 const RANGE_AXIS = {
-  6:   { unit:'minute', step:15,  mStep:30,  hourLabels:true,  labelFmt:'HH:mm',      tipFmt:'yyyy/MM/dd HH:mm:ss' },
-  12:  { unit:'minute', step:15,  mStep:30,  hourLabels:true,  labelFmt:'HH:mm',      tipFmt:'yyyy/MM/dd HH:mm:ss' },
-  24:  { unit:'minute', step:30,  mStep:60,  hourLabels:true,  labelFmt:'HH:mm',      tipFmt:'yyyy/MM/dd HH:mm:ss' },
-  48:  { unit:'hour',   step:3,   mStep:6,   hourLabels:false, labelFmt:'M/d HH:mm',  tipFmt:'yyyy/MM/dd HH:mm' },
-  72:  { unit:'hour',   step:6,   mStep:12,  hourLabels:false, labelFmt:'M/d HH:mm',  tipFmt:'yyyy/MM/dd HH:mm' },
-  168: { unit:'hour',   step:12,  mStep:24,  hourLabels:false, labelFmt:'M/d HH:mm',  tipFmt:'yyyy/MM/dd HH:mm' },
-  336: { unit:'day',    step:1,   mStep:2,   hourLabels:false, labelFmt:'M/d',         tipFmt:'yyyy/MM/dd' },
-  744: { unit:'day',    step:2,   mStep:4,   hourLabels:false, labelFmt:'M/d',         tipFmt:'yyyy/MM/dd' },
+  6:   { unit:'hour',  step:1,  mStep:2,  zebraMin:15,   showHourNum:true,  tipFmt:'yyyy/MM/dd HH:mm:ss' },
+  12:  { unit:'hour',  step:1,  mStep:2,  zebraMin:15,   showHourNum:true,  tipFmt:'yyyy/MM/dd HH:mm:ss' },
+  24:  { unit:'hour',  step:1,  mStep:2,  zebraMin:30,   showHourNum:true,  tipFmt:'yyyy/MM/dd HH:mm:ss' },
+  48:  { unit:'hour',  step:3,  mStep:6,  zebraMin:60,   showHourNum:true,  tipFmt:'yyyy/MM/dd HH:mm' },
+  72:  { unit:'hour',  step:6,  mStep:12, zebraMin:120,  showHourNum:true,  tipFmt:'yyyy/MM/dd HH:mm' },
+  168: { unit:'hour',  step:12, mStep:24, zebraMin:360,  showHourNum:false, labelFmt:'M/d HH:mm', tipFmt:'yyyy/MM/dd HH:mm' },
+  336: { unit:'day',   step:1,  mStep:2,  zebraMin:720,  showHourNum:false, labelFmt:'M/d',        tipFmt:'yyyy/MM/dd' },
+  744: { unit:'day',   step:2,  mStep:4,  zebraMin:1440, showHourNum:false, labelFmt:'M/d',        tipFmt:'yyyy/MM/dd' },
 };
 
 function getAxisCfg(hours) {
@@ -131,6 +174,41 @@ function alignTime(ms, stepMin, roundUp) {
     : Math.floor(elapsed / stepMin) * stepMin;
   return dayStart + aligned * 60000;
 }
+
+// --- ゼブラ表示プラグイン（ローカル午前0時基準で独立計算） ---
+const zebraPlugin = {
+  id: 'zebra',
+  beforeDatasetsDraw(chart) {
+    const { ctx, chartArea } = chart;
+    if (!chartArea) return;
+    const { top, bottom, left, right } = chartArea;
+    const xScale = chart.scales.x;
+    if (!xScale) return;
+    const cfg = getAxisCfg(currentRangeHours);
+    const zMs = cfg.zebraMin * 60000;
+    // ローカル午前0時を基準にバンドを計算
+    const d = new Date(xScale.min);
+    const day0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    let b = Math.floor((xScale.min - day0) / zMs);
+    let t = day0 + b * zMs;
+    ctx.save();
+    while (t < xScale.max) {
+      const next = t + zMs;
+      if (b % 2 === 0) {
+        const x1 = Math.max(xScale.getPixelForValue(t), left);
+        const x2 = Math.min(xScale.getPixelForValue(next), right);
+        if (x2 > x1) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+          ctx.fillRect(x1, top, x2 - x1, bottom - top);
+        }
+      }
+      t = next;
+      b++;
+    }
+    ctx.restore();
+  }
+};
+Chart.register(zebraPlugin);
 
 // --- Chart.js 共通設定 ---
 const commonOpts = (yLabel) => ({
@@ -177,9 +255,16 @@ const chartTH = new Chart(document.getElementById('chartTempHum'), {
 const chartRain = new Chart(document.getElementById('chartRain'), {
   type: 'line',
   data: { datasets: [
-    { ...mkDataset('雨量 (mm/h)', '#00897b', 'y'), fill: true },
+    { ...mkDataset('瞬間 (mm/h)', '#00897b', 'y'), fill: true },
+    mkDataset('積算 (mm)', '#1565c0', 'y'),
   ]},
-  options: commonOpts('mm/h')
+  options: {
+    ...commonOpts('mm'),
+    scales: {
+      ...commonOpts('mm').scales,
+      y: { ...commonOpts('mm').scales.y, min: 0, suggestedMax: 5 }
+    }
+  }
 });
 
 const chartWind = new Chart(document.getElementById('chartWind'), {
@@ -195,18 +280,48 @@ const chartLight = new Chart(document.getElementById('chartLight'), {
   type: 'line',
   data: { datasets: [
     mkDataset('照度 (lux)', '#fdd835', 'y'),
-    mkDataset('UV指数', '#8e24aa', 'y1'),
   ]},
+  options: commonOpts('lux')
+});
+
+const chartUV = new Chart(document.getElementById('chartUV'), {
+  type: 'line',
+  data: { datasets: [
+    mkDataset('UV指数', '#8e24aa', 'y'),
+  ]},
+  options: commonOpts('UV')
+});
+
+const chartWindDir = new Chart(document.getElementById('chartWindDir'), {
+  type: 'scatter',
+  data: { datasets: [{
+    label: '風向',
+    borderColor: '#5c6bc0',
+    backgroundColor: '#5c6bc0',
+    data: [],
+    pointRadius: 2,
+    pointHoverRadius: 4,
+  }]},
   options: {
-    ...commonOpts('lux'),
+    ...commonOpts(''),
+    interaction: { mode: 'nearest', intersect: false },
     scales: {
-      ...commonOpts('lux').scales,
-      y1: { position: 'right', title: { display: true, text: 'UV', font: { size: 10 } }, ticks: { font: { size: 10 } }, grid: { drawOnChartArea: false } }
-    }
+      ...commonOpts('').scales,
+      y: {
+        min: 0, max: 360,
+        ticks: {
+          stepSize: 90,
+          callback: v => ({0:'N',90:'E',180:'S',270:'W',360:'N'})[v] || '',
+          font: { size: 10 }
+        },
+        grid: { color: '#e0e0e0' }
+      }
+    },
+    elements: { point: { radius: 2 } }
   }
 });
 
-allCharts.push(chartTH, chartRain, chartWind, chartLight);
+allCharts.push(chartTH, chartRain, chartWind, chartWindDir, chartLight, chartUV);
 
 // --- 時間軸を範囲に合わせて再設定 ---
 function applyTimeAxis(hours) {
@@ -214,28 +329,17 @@ function applyTimeAxis(hours) {
   const step = isMobile() ? cfg.mStep : cfg.step;
   const sMin = stepToMin(cfg, step);
 
-  // min/max を正時境界に揃えて固定幅を確保
-  const now = Date.now();
-  const axisMax = alignTime(now, sMin, true);
-  const axisMin = alignTime(now - hours * 3600000, sMin, false);
+  const end = Date.now() + timeOffset;
+  const axisMax = alignTime(end, sMin, true);
+  const axisMin = alignTime(end - hours * 3600000, sMin, false);
 
-  // 正時ラベル + サブ刻み縦線モード用コールバック
-  const labelCb = cfg.hourLabels
-    ? function(value, index, ticks) {
-        const d = new Date(ticks[index].value);
-        return d.getMinutes() === 0 ? value : '';
-      }
-    : undefined;   // 全ティックにラベル表示
+  const fmtObj = cfg.showHourNum
+    ? { minute: 'HH:mm', hour: 'HH:mm', day: 'M/d' }
+    : { minute: cfg.labelFmt, hour: cfg.labelFmt, day: cfg.labelFmt };
 
-  const gridColorCb = cfg.hourLabels
-    ? function(ctx) {
-        if (!ctx.tick) return '#e0e0e0';
-        const d = new Date(ctx.tick.value);
-        return d.getMinutes() === 0 ? '#ccc' : '#eaeaea';
-      }
-    : '#e0e0e0';
-
-  const fmtObj = { minute: cfg.labelFmt, hour: cfg.labelFmt, day: cfg.labelFmt };
+  const tickCb = cfg.showHourNum
+    ? function(value) { return String(new Date(value).getHours()); }
+    : null;
 
   allCharts.forEach(c => {
     const x = c.options.scales.x;
@@ -243,46 +347,93 @@ function applyTimeAxis(hours) {
     x.max = axisMax;
     x.time.unit = cfg.unit;
     x.time.stepSize = step;
+    x.ticks.stepSize = step;
     x.time.tooltipFormat = cfg.tipFmt;
     x.time.displayFormats = fmtObj;
-    x.ticks.callback = labelCb;
-    x.grid.color = gridColorCb;
+    x.ticks.callback = tickCb;
+    x.grid.color = '#bbb';
   });
 }
 
 // --- データ操作 ---
+let rainAccum = 0;
+let rainLastDay = -1;
+
 function clearCharts() {
   allCharts.forEach(c => c.data.datasets.forEach(ds => { ds.data = []; }));
+  rainAccum = 0;
+  rainLastDay = -1;
 }
 
 function pushPoint(r) {
   const t = ts(r.recorded_at);
+  // 24時間積算雨量（日付変更でリセット）
+  const day = t.getDate();
+  if (rainLastDay !== -1 && day !== rainLastDay) rainAccum = 0;
+  rainLastDay = day;
+  if (r.rainfall_delta != null) rainAccum += r.rainfall_delta;
+
   chartTH.data.datasets[0].data.push({ x: t, y: r.temperature });
   chartTH.data.datasets[1].data.push({ x: t, y: r.humidity });
   chartRain.data.datasets[0].data.push({ x: t, y: r.rainfall_rate });
+  chartRain.data.datasets[1].data.push({ x: t, y: rainAccum });
   chartWind.data.datasets[0].data.push({ x: t, y: r.wind_avg });
   chartWind.data.datasets[1].data.push({ x: t, y: r.wind_gust });
+  if (r.wind_dir != null) chartWindDir.data.datasets[0].data.push({ x: t, y: r.wind_dir });
   chartLight.data.datasets[0].data.push({ x: t, y: r.illuminance });
-  chartLight.data.datasets[1].data.push({ x: t, y: r.uv_index });
+  chartUV.data.datasets[0].data.push({ x: t, y: r.uv_index });
 }
 
 function updateCharts() {
   allCharts.forEach(c => c.update());
 }
 
+// --- ナビゲーション ---
+function navFmtDate(ms) {
+  const d = new Date(ms);
+  const M = d.getMonth() + 1, D = d.getDate();
+  const h = d.getHours(), m = String(d.getMinutes()).padStart(2, '0');
+  return `${M}/${D} ${h}:${m}`;
+}
+
+function updateNav() {
+  const end = Date.now() + timeOffset;
+  const start = end - currentRangeHours * 3600000;
+  document.getElementById('navRange').textContent = `${navFmtDate(start)} — ${navFmtDate(end)}`;
+  document.getElementById('navFwd').disabled = (timeOffset >= 0);
+}
+
+document.getElementById('navBack').addEventListener('click', () => {
+  timeOffset -= currentRangeHours * 3600000;
+  loadData(currentRangeHours);
+});
+
+document.getElementById('navFwd').addEventListener('click', () => {
+  timeOffset += currentRangeHours * 3600000;
+  if (timeOffset > 0) timeOffset = 0;
+  loadData(currentRangeHours);
+});
+
 // --- データ取得 ---
 function loadData(hours) {
   currentRangeHours = hours;
-  const since = Date.now() / 1000 - hours * 3600;
+  const endSec = Date.now() / 1000 + timeOffset / 1000;
+  const since = endSec - hours * 3600;
   clearCharts();
   applyTimeAxis(hours);
-  fetch(`/api/weather/latest?since=${since}&max_points=600`)
+
+  let url = `/api/weather/latest?since=${since}&max_points=600`;
+  if (timeOffset < 0) url += `&until=${endSec}`;
+
+  fetch(url)
     .then(r => r.json())
     .then(data => {
-      if (!data.length) return;
-      data.forEach(pushPoint);
-      updateCurrent(data[data.length - 1]);
+      if (data.length) {
+        data.forEach(pushPoint);
+        updateCurrent(data[data.length - 1]);
+      }
       updateCharts();
+      updateNav();
     });
 }
 
@@ -292,6 +443,7 @@ document.getElementById('rangeBar').addEventListener('click', e => {
   if (!btn) return;
   document.querySelectorAll('#rangeBar button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  timeOffset = 0;
   loadData(parseInt(btn.dataset.hours));
 });
 
@@ -316,6 +468,8 @@ function connectSSE() {
   es.addEventListener('weather', e => {
     const r = JSON.parse(e.data);
     updateCurrent(r);
+    // 過去表示中はグラフ更新しない
+    if (timeOffset < 0) return;
     // 軸ウィンドウをスライド
     const cfg = getAxisCfg(currentRangeHours);
     const step = isMobile() ? cfg.mStep : cfg.step;
@@ -336,6 +490,7 @@ function connectSSE() {
       });
     }
     updateCharts();
+    updateNav();
   });
   es.onopen = () => { dot.classList.remove('offline'); };
   es.onerror = () => {
@@ -345,6 +500,51 @@ function connectSSE() {
   };
 }
 connectSSE();
+
+// --- 極値テーブル ---
+function loadExtremes() {
+  const tzOff = -new Date().getTimezoneOffset(); // 分 (JST=540)
+  fetch(`/api/weather/extremes?days=3&tz_offset=${tzOff}`)
+    .then(r => r.json())
+    .then(data => {
+      // data は day_num 降順（今日, 昨日, 一昨日）
+      const now = new Date();
+      const todayNum = Math.floor((now.getTime() / 1000 + tzOff * 60) / 86400);
+      const rows = [
+        ['temp_max',     v => v != null ? v.toFixed(1) + ' °C' : '--'],
+        ['temp_min',     v => v != null ? v.toFixed(1) + ' °C' : '--'],
+        ['hum_max',      v => v != null ? v.toFixed(1) + ' %' : '--'],
+        ['hum_min',      v => v != null ? v.toFixed(1) + ' %' : '--'],
+        ['wind_max',     v => v != null ? v.toFixed(1) + ' m/s' : '--'],
+        ['lux_max',      v => v != null ? Math.round(v) + ' lux' : '--'],
+        ['uv_max',       v => v != null ? v.toFixed(1) : '--'],
+        ['rain_rate_max',v => v != null ? v.toFixed(1) + ' mm/h' : '--'],
+        ['rain_24h',     v => v != null ? v.toFixed(1) + ' mm' : '--'],
+      ];
+      // day_num → column index (0=今日, 1=昨日, 2=一昨日)
+      const byCol = {};
+      data.forEach(d => {
+        const col = todayNum - d.day_num;
+        if (col >= 0 && col < 3) byCol[col] = d;
+      });
+      // ヘッダー日付更新
+      for (let c = 0; c < 3; c++) {
+        const dt = new Date((todayNum - c) * 86400 * 1000 - tzOff * 60000);
+        const label = c === 0 ? '今日' : c === 1 ? '昨日' : '一昨日';
+        document.getElementById('extH' + c).textContent = `${label} (${dt.getMonth()+1}/${dt.getDate()})`;
+      }
+      rows.forEach(([ key, fmtFn ], ri) => {
+        for (let ci = 0; ci < 3; ci++) {
+          const el = document.getElementById('e' + ri + ci);
+          const d = byCol[ci];
+          el.textContent = d ? fmtFn(d[key]) : '--';
+        }
+      });
+    });
+}
+loadExtremes();
+// 5分ごとに更新
+setInterval(loadExtremes, 300000);
 </script>
 </body>
 </html>

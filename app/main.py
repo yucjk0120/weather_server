@@ -89,44 +89,75 @@ async def post_weather(data: WeatherInput):
     return record
 
 
+_BUCKET_AVG_SQL = """
+    SELECT
+        MIN(id)                     AS id,
+        station_id,
+        AVG(recorded_at)            AS recorded_at,
+        AVG(temperature)            AS temperature,
+        AVG(humidity)               AS humidity,
+        MAX(rainfall_total)         AS rainfall_total,
+        SUM(rainfall_delta)         AS rainfall_delta,
+        AVG(rainfall_rate)          AS rainfall_rate,
+        CASE WHEN COUNT(wind_dir) = 0 THEN NULL
+             ELSE (DEGREES(ATAN2(
+                 AVG(SIN(wind_dir * 0.017453292519943295)),
+                 AVG(COS(wind_dir * 0.017453292519943295))
+             )) + 360) % 360
+        END                         AS wind_dir,
+        AVG(wind_avg)               AS wind_avg,
+        MAX(wind_gust)              AS wind_gust,
+        AVG(illuminance)            AS illuminance,
+        AVG(uv_index)               AS uv_index
+    FROM weather_records
+    WHERE recorded_at >= ? AND recorded_at <= ?
+    GROUP BY CAST((recorded_at - ?) / ? AS INTEGER), station_id
+    ORDER BY recorded_at
+"""
+
+
 @app.get("/api/weather/latest")
 async def get_latest(
     since: float | None = Query(default=None, description="開始Unix timestamp"),
+    until: float | None = Query(default=None, description="終了Unix timestamp"),
     limit: int = Query(default=120, ge=1, le=100000),
     max_points: int = Query(default=600, ge=1, le=5000, description="最大返却件数（間引き）"),
 ):
     db = await get_db()
     try:
         if since is not None:
-            # 時間範囲指定: since 以降の全データを取得し間引く
-            cursor = await db.execute(
-                "SELECT COUNT(*) FROM weather_records WHERE recorded_at >= ?",
-                (since,),
-            )
-            (total,) = await cursor.fetchone()
+            end = until if until is not None else 9999999999.0
 
-            step = max(1, total // max_points)
             cursor = await db.execute(
-                """
-                SELECT * FROM (
-                    SELECT *, ROW_NUMBER() OVER (ORDER BY recorded_at) AS rn
-                    FROM weather_records
-                    WHERE recorded_at >= ?
-                ) WHERE rn % ? = 1 OR rn = (
-                    SELECT COUNT(*) FROM weather_records WHERE recorded_at >= ?
-                )
-                ORDER BY recorded_at
-                """,
-                (since, step, since),
+                "SELECT COUNT(*), MIN(recorded_at), MAX(recorded_at) "
+                "FROM weather_records "
+                "WHERE recorded_at >= ? AND recorded_at <= ?",
+                (since, end),
             )
+            total, t_min, t_max = await cursor.fetchone()
+
+            if total == 0:
+                return []
+
+            if total <= max_points or t_max == t_min:
+                # 間引き不要 — 全件返却
+                cursor = await db.execute(
+                    "SELECT * FROM weather_records "
+                    "WHERE recorded_at >= ? AND recorded_at <= ? "
+                    "ORDER BY recorded_at",
+                    (since, end),
+                )
+            else:
+                # バケット平均で間引き
+                bucket_sec = (t_max - t_min) / max_points
+                cursor = await db.execute(
+                    _BUCKET_AVG_SQL, (since, end, since, bucket_sec)
+                )
         else:
             # 従来互換: limit 件取得
             cursor = await db.execute(
-                """
-                SELECT * FROM weather_records
-                ORDER BY recorded_at DESC
-                LIMIT ?
-                """,
+                "SELECT * FROM weather_records "
+                "ORDER BY recorded_at DESC LIMIT ?",
                 (limit,),
             )
 
@@ -135,12 +166,58 @@ async def get_latest(
         await db.close()
 
     records = [dict(r) for r in rows]
-    # rn 列を除去 & 古い順ソート
-    for rec in records:
-        rec.pop("rn", None)
     if since is None:
         records.reverse()
     return records
+
+
+@app.get("/api/weather/extremes")
+async def get_extremes(
+    days: int = Query(default=3, ge=1, le=30),
+    tz_offset: int = Query(default=540, description="UTC からのオフセット（分）。JST=540"),
+):
+    """直近 N 日間の日別極値を返す。"""
+    import time
+
+    tz_sec = tz_offset * 60
+    now_local = time.time() + tz_sec
+    today_start_local = int(now_local / 86400) * 86400
+    since_utc = today_start_local - (days - 1) * 86400 - tz_sec
+
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """
+            SELECT
+                CAST((recorded_at + ?) / 86400 AS INTEGER) AS day_num,
+                MIN(temperature)    AS temp_min,
+                MAX(temperature)    AS temp_max,
+                MIN(humidity)       AS hum_min,
+                MAX(humidity)       AS hum_max,
+                MAX(wind_gust)      AS wind_max,
+                MAX(illuminance)    AS lux_max,
+                MAX(uv_index)       AS uv_max,
+                MAX(rainfall_rate)  AS rain_rate_max,
+                SUM(rainfall_delta) AS rain_24h
+            FROM weather_records
+            WHERE recorded_at >= ?
+            GROUP BY day_num
+            ORDER BY day_num DESC
+            """,
+            (tz_sec, since_utc),
+        )
+        rows = await cursor.fetchall()
+    finally:
+        await db.close()
+
+    result = []
+    for r in rows:
+        d = dict(r)
+        # day_num → 日付文字列 (ローカル)
+        epoch = d["day_num"] * 86400  # local midnight epoch
+        d["date"] = f"{epoch}"  # フロント側で変換
+        result.append(d)
+    return result
 
 
 @app.get("/api/weather/stream")
