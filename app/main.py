@@ -10,7 +10,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.database import get_db, init_db
 from app.models import WeatherInput, WeatherRecord
-from app.rainfall import calc_rainfall
+from app.rainfall import backfill_rainfall_rate, calc_rainfall
 
 # SSE: 新規データを通知するためのイベント
 _sse_clients: list[asyncio.Queue] = []
@@ -56,8 +56,9 @@ async def post_weather(data: WeatherInput):
             INSERT INTO weather_records
                 (station_id, recorded_at, temperature, humidity,
                  rainfall_total, rainfall_delta, rainfall_rate,
-                 wind_dir, wind_avg, wind_gust, illuminance, uv_index)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 wind_dir, wind_avg, wind_gust, illuminance, uv_index,
+                 pressure)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data.station_id,
@@ -72,8 +73,13 @@ async def post_weather(data: WeatherInput):
                 data.wind_gust,
                 data.illuminance,
                 data.uv_index,
+                data.pressure,
             ),
         )
+        await db.commit()
+
+        # 過去の NULL レコードをバックフィル
+        await backfill_rainfall_rate(db)
         await db.commit()
 
         # 挿入したレコードを取得
@@ -82,6 +88,18 @@ async def post_weather(data: WeatherInput):
         )
         row = await cursor.fetchone()
         record = dict(row)
+
+        # SSE用: 新レコードの rate は NULL なので
+        # 直前のバックフィル済みレコードの rate を暫定セット
+        if record["rainfall_rate"] is None:
+            cursor = await db.execute(
+                "SELECT rainfall_rate FROM weather_records "
+                "WHERE rainfall_rate IS NOT NULL "
+                "ORDER BY recorded_at DESC LIMIT 1"
+            )
+            prev = await cursor.fetchone()
+            if prev and prev["rainfall_rate"] is not None:
+                record["rainfall_rate"] = prev["rainfall_rate"]
     finally:
         await db.close()
 
@@ -108,7 +126,8 @@ _BUCKET_AVG_SQL = """
         AVG(wind_avg)               AS wind_avg,
         MAX(wind_gust)              AS wind_gust,
         AVG(illuminance)            AS illuminance,
-        AVG(uv_index)               AS uv_index
+        AVG(uv_index)               AS uv_index,
+        AVG(pressure)               AS pressure
     FROM weather_records
     WHERE recorded_at >= ? AND recorded_at <= ?
     GROUP BY CAST((recorded_at - ?) / ? AS INTEGER), station_id
@@ -198,7 +217,9 @@ async def get_extremes(
                 MAX(illuminance)    AS lux_max,
                 MAX(uv_index)       AS uv_max,
                 MAX(rainfall_rate)  AS rain_rate_max,
-                SUM(rainfall_delta) AS rain_24h
+                SUM(rainfall_delta) AS rain_24h,
+                MIN(pressure)       AS pressure_min,
+                MAX(pressure)       AS pressure_max
             FROM weather_records
             WHERE recorded_at >= ?
             GROUP BY day_num

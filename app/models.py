@@ -14,6 +14,7 @@ class WeatherInput(BaseModel):
     wind_gust: float | None = None
     illuminance: float | None = None
     uv_index: float | None = None
+    pressure: float | None = None
 
 
 class WeatherRecord(BaseModel):
@@ -32,3 +33,4 @@ class WeatherRecord(BaseModel):
     wind_gust: float | None = None
     illuminance: float | None = None
     uv_index: float | None = None
+    pressure: float | None = None

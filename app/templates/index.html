@@ -13,19 +13,33 @@ header{background:#1a73e8;color:#fff;padding:12px 16px;display:flex;align-items:
 header h1{font-size:1.1rem;font-weight:600}
 .status{width:8px;height:8px;border-radius:50%;background:#4caf50;flex-shrink:0}
 .status.offline{background:#f44336}
-.current{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;padding:12px 16px}
-.card{background:#fff;border-radius:8px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.card .label{font-size:.7rem;color:#888;text-transform:uppercase;letter-spacing:.5px}
-.card .value{font-size:1.5rem;font-weight:700;margin-top:2px}
-.card .unit{font-size:.8rem;color:#666;font-weight:400}
+/* ダッシュボード — 1カード */
+.current{padding:10px 16px}
+.dash{background:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 1px 4px rgba(0,0,0,.1);display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+.dash-item{display:flex;align-items:center;gap:3px;padding:2px 4px}
+.dash-sep{width:1px;height:28px;background:#e0e0e0;flex-shrink:0}
+.dash-val{font-size:1.15rem;font-weight:700;transition:color .3s;white-space:nowrap}
+.dash-unit{font-size:.65rem;color:#888;font-weight:400}
+.dash-sub{font-size:.6rem;color:#999;margin-left:2px}
+/* 風向風速コンパス */
+.wind-compass{width:56px;height:56px;flex-shrink:0}
+.wind-compass svg{width:100%;height:100%}
+.wind-center{font-size:10px;font-weight:700;fill:#333}
+.wind-arrow{transition:transform .5s ease}
+/* 雨量円柱 */
+.rain-cylinder{width:36px;height:54px;flex-shrink:0}
+.rain-cylinder svg{width:100%;height:100%}
 .range-bar{display:flex;gap:4px;padding:8px 16px;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .range-bar button{flex-shrink:0;padding:6px 12px;border:1px solid #ddd;border-radius:16px;background:#fff;font-size:.75rem;color:#555;cursor:pointer;transition:all .15s}
 .range-bar button.active{background:#1a73e8;color:#fff;border-color:#1a73e8}
 .range-bar button:hover:not(.active){background:#e8f0fe}
-.charts{padding:0 16px 16px}
-.chart-box{background:#fff;border-radius:8px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.snap-toggle{padding:6px 10px;border:1px solid #aaa;border-radius:16px;background:#fff;font-size:.7rem;color:#777;cursor:pointer;transition:all .15s;margin-left:4px;white-space:nowrap}
+.snap-toggle.active{background:#ff9800;color:#fff;border-color:#ff9800}
+.charts{display:grid;grid-template-columns:1fr;gap:10px;padding:0 16px 16px}
+@media(min-width:900px){.charts{grid-template-columns:repeat(2,1fr)}}
+.chart-box{background:#fff;border-radius:8px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);min-width:0}
 .chart-box h2{font-size:.85rem;color:#555;margin-bottom:8px}
-canvas{width:100%!important;height:200px!important}
+.chart-wrap{position:relative;height:300px}
 .nav-bar{display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 16px}
 .nav-btn{width:28px;height:28px;border:none;background:none;cursor:pointer;color:#555;font-size:0;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
 .nav-btn::after{content:'';display:block;width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent}
@@ -35,9 +49,7 @@ canvas{width:100%!important;height:200px!important}
 .nav-btn:not(:disabled):hover{opacity:.6}
 .nav-range{font-size:.8rem;color:#555;min-width:180px;text-align:center}
 .time-info{text-align:center;padding:4px;font-size:.7rem;color:#999}
-.extremes{padding:0 16px 12px}
-.extremes h2{font-size:.85rem;color:#555;margin-bottom:6px}
-.ext-table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);font-size:.78rem}
+.ext-table{width:100%;border-collapse:collapse;font-size:.78rem}
 .ext-table th,.ext-table td{padding:5px 8px;text-align:center;border-bottom:1px solid #eee}
 .ext-table th{background:#f5f7fa;color:#666;font-weight:600}
 .ext-table td:first-child{text-align:left;color:#555;font-weight:500}
@@ -52,14 +64,81 @@ canvas{width:100%!important;height:200px!important}
   <h1>気象ステーション</h1>
 </header>
 
-<div class="current" id="currentCards">
-  <div class="card"><div class="label">気温</div><div class="value" id="cur-temp">--<span class="unit"> °C</span></div></div>
-  <div class="card"><div class="label">湿度</div><div class="value" id="cur-hum">--<span class="unit"> %</span></div></div>
-  <div class="card"><div class="label">雨量</div><div class="value" id="cur-rain">--<span class="unit"> mm/h</span></div></div>
-  <div class="card"><div class="label">風速</div><div class="value" id="cur-wind">--<span class="unit"> m/s</span></div></div>
-  <div class="card"><div class="label">風向</div><div class="value" id="cur-dir">--<span class="unit"> °</span></div></div>
-  <div class="card"><div class="label">照度</div><div class="value" id="cur-lux">--<span class="unit"> lux</span></div></div>
-  <div class="card"><div class="label">UV指数</div><div class="value" id="cur-uv">--</div></div>
+<div class="current">
+<div class="dash" id="currentCards">
+  <!-- 気温: 温度計+数値 -->
+  <div class="dash-item">
+    <svg viewBox="0 0 24 40" width="20" height="34"><rect x="9" y="2" width="6" height="26" rx="3" fill="#eee" stroke="#bbb" stroke-width="1"/><rect id="thermo-fill" x="10" y="18" width="4" height="10" rx="2" fill="#e53935"/><circle cx="12" cy="32" r="5" fill="#e53935" stroke="#bbb" stroke-width="1"/></svg>
+    <span class="dash-val" id="cur-temp">--</span><span class="dash-unit">°C</span>
+  </div>
+  <div class="dash-sep"></div>
+  <!-- 湿度: 水滴+数値 -->
+  <div class="dash-item">
+    <svg viewBox="0 0 32 40" width="16" height="22"><path d="M16 4 C16 4 6 18 6 26 a10 10 0 0 0 20 0 C26 18 16 4 16 4Z" fill="#bbdefb" stroke="#64b5f6" stroke-width="1.2" id="hum-drop"/></svg>
+    <span class="dash-val" id="cur-hum">--</span><span class="dash-unit">%</span>
+  </div>
+  <div class="dash-sep"></div>
+  <!-- 雨量: 円柱ゲージ(24h) + 瞬間雨量 -->
+  <div class="dash-item">
+    <div class="rain-cylinder">
+      <svg viewBox="0 0 50 80">
+        <defs><clipPath id="cylClip"><rect x="9" y="12" width="32" height="56"/></clipPath><linearGradient id="rainGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#64b5f6"/><stop offset="100%" stop-color="#1565c0"/></linearGradient></defs>
+        <ellipse cx="25" cy="68" rx="16" ry="5" fill="#e8e8e8" stroke="#ccc" stroke-width="0.8"/>
+        <rect x="9" y="12" width="32" height="56" fill="#f0f0f0"/>
+        <line x1="9" y1="12" x2="9" y2="68" stroke="#ccc" stroke-width="0.8"/>
+        <line x1="41" y1="12" x2="41" y2="68" stroke="#ccc" stroke-width="0.8"/>
+        <line x1="6" y1="26" x2="9" y2="26" stroke="#aaa" stroke-width="0.6"/>
+        <line x1="6" y1="40" x2="9" y2="40" stroke="#aaa" stroke-width="0.6"/>
+        <line x1="6" y1="54" x2="9" y2="54" stroke="#aaa" stroke-width="0.6"/>
+        <rect id="rain-cyl-fill" x="9" y="68" width="32" height="0" fill="url(#rainGrad)" clip-path="url(#cylClip)"/>
+        <ellipse id="rain-cyl-surface" cx="25" cy="68" rx="16" ry="5" fill="#42a5f5" opacity="0.7" visibility="hidden"/>
+        <ellipse cx="25" cy="12" rx="16" ry="5" fill="#f5f5f5" stroke="#ccc" stroke-width="0.8"/>
+        <text id="rain-cyl-text" x="25" y="44" text-anchor="middle" font-size="11" font-weight="bold" fill="#1565c0">0.0</text>
+        <text x="25" y="54" text-anchor="middle" font-size="6.5" fill="#888">mm</text>
+      </svg>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.2">
+      <span class="dash-val" id="cur-rain" style="font-size:.95rem">--</span><span class="dash-unit">mm/h</span>
+    </div>
+  </div>
+  <div class="dash-sep"></div>
+  <!-- 風向風速: コンパス -->
+  <div class="dash-item">
+    <div class="wind-compass">
+      <svg viewBox="0 0 80 80">
+        <circle cx="40" cy="40" r="36" fill="none" stroke="#ddd" stroke-width="1.5"/>
+        <text x="40" y="10" text-anchor="middle" font-size="8" fill="#999">N</text>
+        <text x="72" y="43" text-anchor="middle" font-size="8" fill="#999">E</text>
+        <text x="40" y="76" text-anchor="middle" font-size="8" fill="#999">S</text>
+        <text x="8" y="43" text-anchor="middle" font-size="8" fill="#999">W</text>
+        <g id="wind-arrow" class="wind-arrow" transform="rotate(0,40,40)">
+          <polygon points="40,8 35,24 40,20 45,24" fill="#e53935" opacity="0.85"/>
+          <line x1="40" y1="20" x2="40" y2="56" stroke="#e53935" stroke-width="2" opacity="0.5"/>
+        </g>
+        <text id="wind-spd-txt" class="wind-center" x="40" y="44" text-anchor="middle">--</text>
+      </svg>
+    </div>
+  </div>
+  <div class="dash-sep"></div>
+  <!-- 照度: 太陽+数値 -->
+  <div class="dash-item">
+    <svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="7" fill="#fdd835" stroke="#f9a825" stroke-width="1"/><g stroke="#fbc02d" stroke-width="1.5" stroke-linecap="round"><line x1="16" y1="2" x2="16" y2="6"/><line x1="16" y1="26" x2="16" y2="30"/><line x1="2" y1="16" x2="6" y2="16"/><line x1="26" y1="16" x2="30" y2="16"/><line x1="5.9" y1="5.9" x2="8.7" y2="8.7"/><line x1="23.3" y1="23.3" x2="26.1" y2="26.1"/><line x1="5.9" y1="26.1" x2="8.7" y2="23.3"/><line x1="23.3" y1="8.7" x2="26.1" y2="5.9"/></g></svg>
+    <span class="dash-val" id="cur-lux">--</span><span class="dash-unit">lux</span>
+  </div>
+  <div class="dash-sep"></div>
+  <!-- UV: アイコン+数値 -->
+  <div class="dash-item">
+    <svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="10" fill="none" stroke="#8e24aa" stroke-width="2" stroke-dasharray="4 2"/><text x="16" y="20" text-anchor="middle" font-size="11" font-weight="bold" fill="#8e24aa">UV</text></svg>
+    <span class="dash-val" id="cur-uv">--</span>
+  </div>
+  <div class="dash-sep"></div>
+  <!-- 大気圧: 気圧計アイコン+数値+傾向矢印 -->
+  <div class="dash-item">
+    <svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="12" fill="none" stroke="#607d8b" stroke-width="1.5"/><path d="M16 16 L16 7" stroke="#607d8b" stroke-width="2" stroke-linecap="round"/><path d="M16 16 L22 14" stroke="#90a4ae" stroke-width="1.5" stroke-linecap="round"/><circle cx="16" cy="16" r="2" fill="#607d8b"/></svg>
+    <span class="dash-val" id="cur-press">--</span><span class="dash-unit">hPa</span>
+    <svg id="press-trend" viewBox="0 0 16 16" width="14" height="14" style="margin-left:2px"><path d="M8 2 L8 14" stroke="#999" stroke-width="2" stroke-linecap="round"/></svg>
+  </div>
+</div>
 </div>
 
 <div class="range-bar" id="rangeBar">
@@ -71,6 +150,7 @@ canvas{width:100%!important;height:200px!important}
   <button data-hours="168">7日間</button>
   <button data-hours="336">14日間</button>
   <button data-hours="744">1ヶ月</button>
+  <button class="snap-toggle" id="snapToggle">0時基準</button>
 </div>
 
 <div class="nav-bar">
@@ -80,32 +160,31 @@ canvas{width:100%!important;height:200px!important}
 </div>
 <div class="time-info" id="timeInfo">データなし</div>
 
-<div class="extremes">
-  <h2>極値一覧</h2>
-  <table class="ext-table" id="extTable">
-    <thead><tr><th></th><th id="extH0">今日</th><th id="extH1">昨日</th><th id="extH2">一昨日</th></tr></thead>
-    <tbody>
-      <tr><td>気温 最高</td><td class="hi" id="e00">--</td><td class="hi" id="e01">--</td><td class="hi" id="e02">--</td></tr>
-      <tr><td>気温 最低</td><td class="lo" id="e10">--</td><td class="lo" id="e11">--</td><td class="lo" id="e12">--</td></tr>
-      <tr><td>湿度 最高</td><td id="e20">--</td><td id="e21">--</td><td id="e22">--</td></tr>
-      <tr><td>湿度 最低</td><td id="e30">--</td><td id="e31">--</td><td id="e32">--</td></tr>
-      <tr><td>風速 最大</td><td id="e40">--</td><td id="e41">--</td><td id="e42">--</td></tr>
-      <tr><td>照度 最大</td><td id="e50">--</td><td id="e51">--</td><td id="e52">--</td></tr>
-      <tr><td>UV 最大</td><td id="e60">--</td><td id="e61">--</td><td id="e62">--</td></tr>
-      <tr><td>瞬間雨量 最大</td><td id="e70">--</td><td id="e71">--</td><td id="e72">--</td></tr>
-      <tr><td>24時間雨量</td><td id="e80">--</td><td id="e81">--</td><td id="e82">--</td></tr>
-    </tbody>
-  </table>
-</div>
-
 <div class="charts">
-  <div class="chart-box"><h2>気温</h2><canvas id="chartTemp"></canvas></div>
-  <div class="chart-box"><h2>湿度</h2><canvas id="chartHum"></canvas></div>
-  <div class="chart-box"><h2>雨量</h2><canvas id="chartRain"></canvas></div>
-  <div class="chart-box"><h2>風速</h2><canvas id="chartWind"></canvas></div>
-  <div class="chart-box"><h2>風向</h2><canvas id="chartWindDir"></canvas></div>
-  <div class="chart-box"><h2>照度</h2><canvas id="chartLight"></canvas></div>
-  <div class="chart-box"><h2>UV指数</h2><canvas id="chartUV"></canvas></div>
+  <div class="chart-box">
+    <table class="ext-table" id="extTable">
+      <thead><tr><th>極値一覧</th><th id="extH0">今日</th><th id="extH1">昨日</th><th id="extH2">一昨日</th></tr></thead>
+      <tbody>
+        <tr><td>気温 最高</td><td class="hi" id="e00">--</td><td class="hi" id="e01">--</td><td class="hi" id="e02">--</td></tr>
+        <tr><td>気温 最低</td><td class="lo" id="e10">--</td><td class="lo" id="e11">--</td><td class="lo" id="e12">--</td></tr>
+        <tr><td>湿度 最高</td><td id="e20">--</td><td id="e21">--</td><td id="e22">--</td></tr>
+        <tr><td>湿度 最低</td><td id="e30">--</td><td id="e31">--</td><td id="e32">--</td></tr>
+        <tr><td>風速 最大</td><td id="e40">--</td><td id="e41">--</td><td id="e42">--</td></tr>
+        <tr><td>照度 最大</td><td id="e50">--</td><td id="e51">--</td><td id="e52">--</td></tr>
+        <tr><td>UV 最大</td><td id="e60">--</td><td id="e61">--</td><td id="e62">--</td></tr>
+        <tr><td>瞬間雨量 最大</td><td id="e70">--</td><td id="e71">--</td><td id="e72">--</td></tr>
+        <tr><td>24時間雨量</td><td id="e80">--</td><td id="e81">--</td><td id="e82">--</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="chart-box"><h2>気温</h2><div class="chart-wrap"><canvas id="chartTemp"></canvas></div></div>
+  <div class="chart-box"><h2>湿度</h2><div class="chart-wrap"><canvas id="chartHum"></canvas></div></div>
+  <div class="chart-box"><h2>雨量</h2><div class="chart-wrap"><canvas id="chartRain"></canvas></div></div>
+  <div class="chart-box"><h2>風速</h2><div class="chart-wrap"><canvas id="chartWind"></canvas></div></div>
+  <div class="chart-box"><h2>風向</h2><div class="chart-wrap"><canvas id="chartWindDir"></canvas></div></div>
+  <div class="chart-box"><h2>照度</h2><div class="chart-wrap"><canvas id="chartLight"></canvas></div></div>
+  <div class="chart-box"><h2>UV指数</h2><div class="chart-wrap"><canvas id="chartUV"></canvas></div></div>
+  <div class="chart-box"><h2>大気圧</h2><div class="chart-wrap"><canvas id="chartPress"></canvas></div></div>
 </div>
 
 <script>
@@ -114,16 +193,108 @@ const fmt = v => v != null ? v.toFixed(1) : '--';
 const allCharts = [];
 let currentRangeHours = 24;
 let timeOffset = 0; // ms, 0=現在, 負=過去
+let snapToZero = false; // 0時基準モード
 
+// --- 温度帯カラー ---
+function tempColor(t) {
+  if (t == null) return '#333';
+  if (t < 0) return '#1565c0';
+  if (t < 10) return '#42a5f5';
+  if (t < 20) return '#43a047';
+  if (t < 30) return '#ef6c00';
+  return '#c62828';
+}
+// --- 湿度カラー ---
+function humColor(h) {
+  if (h == null) return '#333';
+  if (h < 30) return '#ef6c00';
+  if (h < 60) return '#43a047';
+  if (h < 80) return '#1e88e5';
+  return '#1565c0';
+}
+// --- 風向ラベル ---
+function dirLabel(deg) {
+  if (deg == null) return '--';
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
 // --- 現在値パネル更新 ---
 function updateCurrent(r) {
-  document.getElementById('cur-temp').innerHTML = fmt(r.temperature) + '<span class="unit"> °C</span>';
-  document.getElementById('cur-hum').innerHTML = fmt(r.humidity) + '<span class="unit"> %</span>';
-  document.getElementById('cur-rain').innerHTML = fmt(r.rainfall_rate) + '<span class="unit"> mm/h</span>';
-  document.getElementById('cur-wind').innerHTML = fmt(r.wind_avg) + '<span class="unit"> m/s</span>';
-  document.getElementById('cur-dir').innerHTML = fmt(r.wind_dir) + '<span class="unit"> °</span>';
-  document.getElementById('cur-lux').innerHTML = (r.illuminance != null ? Math.round(r.illuminance) : '--') + '<span class="unit"> lux</span>';
-  document.getElementById('cur-uv').innerHTML = fmt(r.uv_index);
+  // 気温
+  const tEl = document.getElementById('cur-temp');
+  tEl.textContent = fmt(r.temperature);
+  tEl.style.color = tempColor(r.temperature);
+  const tf = document.getElementById('thermo-fill');
+  if (tf && r.temperature != null) {
+    const pct = Math.max(0, Math.min(100, (r.temperature + 10) / 50 * 100));
+    const h = 2 + pct * 0.16;
+    tf.setAttribute('height', h.toFixed(1));
+    tf.setAttribute('y', (28 - h).toFixed(1));
+    tf.setAttribute('fill', tempColor(r.temperature));
+  }
+  // 湿度
+  const hEl = document.getElementById('cur-hum');
+  hEl.textContent = fmt(r.humidity);
+  hEl.style.color = humColor(r.humidity);
+  const hDrop = document.getElementById('hum-drop');
+  if (hDrop && r.humidity != null) {
+    const hc = humColor(r.humidity);
+    hDrop.setAttribute('fill', hc + '30');
+    hDrop.setAttribute('stroke', hc);
+  }
+  // 雨量 — 円柱ゲージ(24h積算) + 瞬間雨量
+  document.getElementById('cur-rain').textContent = fmt(r.rainfall_rate);
+  const r24 = dashRain24h;
+  const cylText = document.getElementById('rain-cyl-text');
+  if (cylText) cylText.textContent = r24.toFixed(1);
+  const cylFill = document.getElementById('rain-cyl-fill');
+  const cylSurf = document.getElementById('rain-cyl-surface');
+  if (cylFill) {
+    const pct = Math.min(100, (r24 / 50) * 100);
+    const fillH = pct / 100 * 56;
+    cylFill.setAttribute('y', (68 - fillH).toFixed(1));
+    cylFill.setAttribute('height', fillH.toFixed(1));
+    if (cylSurf) {
+      if (fillH > 0) { cylSurf.setAttribute('cy', (68 - fillH).toFixed(1)); cylSurf.setAttribute('visibility', 'visible'); }
+      else { cylSurf.setAttribute('visibility', 'hidden'); }
+    }
+  }
+  // 風向風速 — コンパス
+  const arrow = document.getElementById('wind-arrow');
+  if (arrow && r.wind_dir != null) arrow.setAttribute('transform', 'rotate(' + r.wind_dir + ',40,40)');
+  const wsTxt = document.getElementById('wind-spd-txt');
+  if (wsTxt) wsTxt.textContent = r.wind_avg != null ? r.wind_avg.toFixed(1) : '--';
+  // 照度
+  document.getElementById('cur-lux').textContent = r.illuminance != null ? Math.round(r.illuminance).toLocaleString() : '--';
+  // UV
+  const uvEl = document.getElementById('cur-uv');
+  uvEl.textContent = fmt(r.uv_index);
+  if (r.uv_index != null) {
+    uvEl.style.color = r.uv_index < 3 ? '#43a047' : r.uv_index < 6 ? '#ef6c00' : r.uv_index < 8 ? '#e53935' : '#7b1fa2';
+  }
+  // 大気圧 + 6時間傾向
+  document.getElementById('cur-press').textContent = r.pressure != null ? r.pressure.toFixed(1) : '--';
+  const trendSvg = document.getElementById('press-trend');
+  if (trendSvg) {
+    const pData = chartPress.data.datasets[0].data;
+    const nowMs = r.recorded_at * 1000;
+    const ago6h = nowMs - 6 * 3600000;
+    // 6時間前付近のデータを探す
+    let oldP = null;
+    for (let i = 0; i < pData.length; i++) {
+      const px = pData[i].x instanceof Date ? pData[i].x.getTime() : pData[i].x;
+      if (px >= ago6h) { oldP = pData[i].y; break; }
+    }
+    let path, color;
+    if (oldP != null && r.pressure != null) {
+      const diff = r.pressure - oldP;
+      if (diff > 1) { path = 'M8 13 L8 3 M4 7 L8 3 L12 7'; color = '#e53935'; }       // 上昇
+      else if (diff < -1) { path = 'M8 3 L8 13 M4 9 L8 13 L12 9'; color = '#1565c0'; }  // 下降
+      else { path = 'M2 8 L14 8'; color = '#999'; }                                       // 横ばい
+    } else { path = 'M2 8 L14 8'; color = '#ccc'; }
+    trendSvg.innerHTML = '<path d="' + path + '" stroke="' + color + '" stroke-width="2" stroke-linecap="round" fill="none"/>';
+  }
+  // 更新時刻
   document.getElementById('timeInfo').textContent = '最終更新: ' + ts(r.recorded_at).toLocaleString('ja-JP');
 }
 
@@ -210,6 +381,85 @@ const zebraPlugin = {
   }
 };
 Chart.register(zebraPlugin);
+
+// --- 日没・日の出計算（US Naval Observatory 簡易アルゴリズム） ---
+const SUN_LAT = 36.148591106319216;
+const SUN_LON = 140.043032858851;
+
+function calcSunTimeMs(year, month, day, lat, lng, rising) {
+  const toRad = Math.PI / 180, toDeg = 180 / Math.PI;
+  const N1 = Math.floor(275 * month / 9);
+  const N2 = Math.floor((month + 9) / 12);
+  const N3 = 1 + Math.floor((year - 4 * Math.floor(year / 4) + 2) / 3);
+  const N = N1 - N2 * N3 + day - 30;
+  const lngHour = lng / 15;
+  const t = rising ? N + (6 - lngHour) / 24 : N + (18 - lngHour) / 24;
+  const M = 0.9856 * t - 3.289;
+  let L = M + 1.916 * Math.sin(M * toRad) + 0.020 * Math.sin(2 * M * toRad) + 282.634;
+  L = ((L % 360) + 360) % 360;
+  let RA = toDeg * Math.atan(0.91764 * Math.tan(L * toRad));
+  RA = ((RA % 360) + 360) % 360;
+  RA += Math.floor(L / 90) * 90 - Math.floor(RA / 90) * 90;
+  RA /= 15;
+  const sinDec = 0.39782 * Math.sin(L * toRad);
+  const cosDec = Math.cos(Math.asin(sinDec));
+  const cosH = (Math.cos(90.833 * toRad) - sinDec * Math.sin(lat * toRad))
+    / (cosDec * Math.cos(lat * toRad));
+  if (cosH > 1 || cosH < -1) return null;
+  const H = rising ? (360 - toDeg * Math.acos(cosH)) / 15 : toDeg * Math.acos(cosH) / 15;
+  let UT = H + RA - 0.06571 * t - 6.622 - lngHour;
+  UT = ((UT % 24) + 24) % 24;
+  return Date.UTC(year, month - 1, day) + UT * 3600000;
+}
+
+// --- 夜間帯オーバーレイプラグイン ---
+// UTC 日ごとに日出・日没イベントを収集し、時系列でソートしてペアリングする
+// → タイムゾーンの日付境界を意識せず正しく夜間帯を描画できる
+const nightPlugin = {
+  id: 'night',
+  beforeDatasetsDraw(chart) {
+    const { ctx, chartArea } = chart;
+    if (!chartArea) return;
+    const { top, bottom, left, right } = chartArea;
+    const xScale = chart.scales.x;
+    if (!xScale) return;
+
+    // 表示範囲 ±2 日のマージンで日出・日没イベントを収集
+    const events = [];
+    const d0 = new Date(xScale.min);
+    d0.setUTCDate(d0.getUTCDate() - 2);
+    d0.setUTCHours(0, 0, 0, 0);
+    const d1 = new Date(xScale.max);
+    d1.setUTCDate(d1.getUTCDate() + 2);
+
+    for (let d = new Date(d0); d <= d1; d.setUTCDate(d.getUTCDate() + 1)) {
+      const rise = calcSunTimeMs(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), SUN_LAT, SUN_LON, true);
+      const set  = calcSunTimeMs(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), SUN_LAT, SUN_LON, false);
+      if (rise != null) events.push({ t: rise, type: 'r' });
+      if (set  != null) events.push({ t: set,  type: 's' });
+    }
+    events.sort((a, b) => a.t - b.t);
+
+    // 日没→翌日出 のペアを描画
+    ctx.save();
+    ctx.fillStyle = 'rgba(15, 15, 50, 0.13)';
+    for (let i = 0; i < events.length - 1; i++) {
+      if (events[i].type === 's' && events[i + 1].type === 'r') {
+        const ns = Math.max(events[i].t, xScale.min);
+        const ne = Math.min(events[i + 1].t, xScale.max);
+        if (ne > ns) {
+          const x1 = Math.max(xScale.getPixelForValue(ns), left);
+          const x2 = Math.min(xScale.getPixelForValue(ne), right);
+          if (x2 > x1) {
+            ctx.fillRect(x1, top, x2 - x1, bottom - top);
+          }
+        }
+      }
+    }
+    ctx.restore();
+  }
+};
+Chart.register(nightPlugin);
 
 // --- Chart.js 共通設定 ---
 const commonOpts = (yLabel) => ({
@@ -329,6 +579,18 @@ const chartUV = new Chart(document.getElementById('chartUV'), {
   }
 });
 
+const chartPress = new Chart(document.getElementById('chartPress'), {
+  type: 'line',
+  data: { datasets: [ mkDataset('気圧 (hPa)', '#607d8b', 'y') ]},
+  options: {
+    ...commonOpts('hPa'),
+    scales: {
+      ...commonOpts('hPa').scales,
+      y: { ...commonOpts('hPa').scales.y, grid: { color: yGridColor(10, false), lineWidth: yGridWidth(10, false) } }
+    }
+  }
+});
+
 const chartWindDir = new Chart(document.getElementById('chartWindDir'), {
   type: 'scatter',
   data: { datasets: [
@@ -373,7 +635,30 @@ const chartWindDir = new Chart(document.getElementById('chartWindDir'), {
   }
 });
 
-allCharts.push(chartTemp, chartHum, chartRain, chartWind, chartWindDir, chartLight, chartUV);
+allCharts.push(chartTemp, chartHum, chartRain, chartWind, chartWindDir, chartLight, chartUV, chartPress);
+
+// --- 0時基準: 終了時刻を正時境界にスナップ ---
+function calcSnapEnd(hours) {
+  const now = new Date(Date.now() + timeOffset);
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (hours <= 6) {
+    // 6h刻み: 次の 0,6,12,18 時
+    const h = now.getHours();
+    const next6 = Math.ceil((h + 0.01) / 6) * 6;
+    d.setHours(next6, 0, 0, 0);
+    return d.getTime();
+  }
+  if (hours <= 12) {
+    // 12h刻み: 次の 0,12 時
+    const h = now.getHours();
+    const next12 = Math.ceil((h + 0.01) / 12) * 12;
+    d.setHours(next12, 0, 0, 0);
+    return d.getTime();
+  }
+  // 24h以上: 翌日0時
+  d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
 
 // --- 時間軸を範囲に合わせて再設定 ---
 function applyTimeAxis(hours) {
@@ -381,7 +666,12 @@ function applyTimeAxis(hours) {
   const step = isMobile() ? cfg.mStep : cfg.step;
   const sMin = stepToMin(cfg, step);
 
-  const end = Date.now() + timeOffset;
+  let end;
+  if (snapToZero) {
+    end = calcSnapEnd(hours);
+  } else {
+    end = Date.now() + timeOffset;
+  }
   const axisMax = alignTime(end, sMin, true);
   const axisMin = alignTime(end - hours * 3600000, sMin, false);
 
@@ -410,6 +700,10 @@ function applyTimeAxis(hours) {
 // --- データ操作 ---
 let rainAccum = 0;
 let rainLastDay = -1;
+// ダッシュボード用24h雨量（グラフ範囲に依存しない）
+let dashRain24h = 0;
+let dashRainLastDay = -1;
+let dashRainInited = false;
 
 function clearCharts() {
   allCharts.forEach(c => c.data.datasets.forEach(ds => { ds.data = []; }));
@@ -434,6 +728,7 @@ function pushPoint(r) {
   if (r.wind_dir != null) chartWindDir.data.datasets[0].data.push({ x: t, y: r.wind_dir });
   chartLight.data.datasets[0].data.push({ x: t, y: r.illuminance });
   chartUV.data.datasets[0].data.push({ x: t, y: r.uv_index });
+  if (r.pressure != null) chartPress.data.datasets[0].data.push({ x: t, y: r.pressure });
 }
 
 // --- 風向トレンドライン（ベクトル移動平均） ---
@@ -472,7 +767,12 @@ function navFmtDate(ms) {
 }
 
 function updateNav() {
-  const end = Date.now() + timeOffset;
+  let end;
+  if (snapToZero) {
+    end = calcSnapEnd(currentRangeHours);
+  } else {
+    end = Date.now() + timeOffset;
+  }
   const start = end - currentRangeHours * 3600000;
   document.getElementById('navRange').textContent = `${navFmtDate(start)} — ${navFmtDate(end)}`;
   document.getElementById('navFwd').disabled = (timeOffset >= 0);
@@ -489,37 +789,66 @@ document.getElementById('navFwd').addEventListener('click', () => {
   loadData(currentRangeHours);
 });
 
+// --- ダッシュボード最新データ取得（グラフ範囲に依存しない） ---
+function fetchDashboard() {
+  fetch('/api/weather/latest?limit=1')
+    .then(r => r.json())
+    .then(data => {
+      if (data.length) updateCurrent(data[0]);
+    });
+}
+
 // --- データ取得 ---
 function loadData(hours) {
   currentRangeHours = hours;
-  const endSec = Date.now() / 1000 + timeOffset / 1000;
+  let endMs;
+  if (snapToZero) {
+    endMs = calcSnapEnd(hours);
+  } else {
+    endMs = Date.now() + timeOffset;
+  }
+  const endSec = endMs / 1000;
   const since = endSec - hours * 3600;
   clearCharts();
   applyTimeAxis(hours);
 
   let url = `/api/weather/latest?since=${since}&max_points=600`;
-  if (timeOffset < 0) url += `&until=${endSec}`;
+  if (snapToZero || timeOffset < 0) url += `&until=${endSec}`;
 
   fetch(url)
     .then(r => r.json())
     .then(data => {
       if (data.length) {
         data.forEach(pushPoint);
-        updateCurrent(data[data.length - 1]);
+      }
+      // 初回ロード時: チャート雨量からダッシュ用雨量を初期化
+      if (!dashRainInited) {
+        dashRain24h = rainAccum;
+        dashRainLastDay = rainLastDay;
+        dashRainInited = true;
       }
       updateCharts();
       updateNav();
+      fetchDashboard(); // 常に最新レコードでコンパクト表示を更新
     });
 }
 
 // --- 範囲切替ボタン ---
 document.getElementById('rangeBar').addEventListener('click', e => {
-  const btn = e.target.closest('button');
+  const btn = e.target.closest('button[data-hours]');
   if (!btn) return;
-  document.querySelectorAll('#rangeBar button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#rangeBar button[data-hours]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   timeOffset = 0;
   loadData(parseInt(btn.dataset.hours));
+});
+
+// --- 0時基準トグル ---
+document.getElementById('snapToggle').addEventListener('click', () => {
+  snapToZero = !snapToZero;
+  document.getElementById('snapToggle').classList.toggle('active', snapToZero);
+  timeOffset = 0;
+  loadData(currentRangeHours);
 });
 
 // --- レスポンシブ: 画面幅変更時に軸を再計算 ---
@@ -542,23 +871,32 @@ function connectSSE() {
   const es = new EventSource('/api/weather/stream');
   es.addEventListener('weather', e => {
     const r = JSON.parse(e.data);
+    // ダッシュボード用雨量を更新
+    const sseDay = new Date(r.recorded_at * 1000).getDate();
+    if (dashRainLastDay !== -1 && sseDay !== dashRainLastDay) dashRain24h = 0;
+    dashRainLastDay = sseDay;
+    if (r.rainfall_delta != null) dashRain24h += r.rainfall_delta;
     updateCurrent(r);
-    // 過去表示中はグラフ更新しない
+    // 過去表示中またはスナップモードで未来端固定中はグラフ更新しない
     if (timeOffset < 0) return;
-    // 軸ウィンドウをスライド
-    const cfg = getAxisCfg(currentRangeHours);
-    const step = isMobile() ? cfg.mStep : cfg.step;
-    const sMin = stepToMin(cfg, step);
-    const now = Date.now();
-    const axisMax = alignTime(now, sMin, true);
-    const axisMin = alignTime(now - currentRangeHours * 3600000, sMin, false);
-    allCharts.forEach(c => {
-      const x = c.options.scales.x;
-      x.min = axisMin;
-      x.max = axisMax;
-    });
+    if (snapToZero) { applyTimeAxis(currentRangeHours); }
+    else {
+      // 軸ウィンドウをスライド
+      const cfg = getAxisCfg(currentRangeHours);
+      const step = isMobile() ? cfg.mStep : cfg.step;
+      const sMin = stepToMin(cfg, step);
+      const now = Date.now();
+      const axisMax = alignTime(now, sMin, true);
+      const axisMin = alignTime(now - currentRangeHours * 3600000, sMin, false);
+      allCharts.forEach(c => {
+        const x = c.options.scales.x;
+        x.min = axisMin;
+        x.max = axisMax;
+      });
+    }
     // 範囲内ならグラフに追加
-    if (r.recorded_at * 1000 >= axisMin) {
+    const xMin = allCharts[0].options.scales.x.min;
+    if (r.recorded_at * 1000 >= xMin) {
       pushPoint(r);
       allCharts.forEach(c => {
         c.data.datasets.forEach(ds => { if (ds.data.length > 600) ds.data.shift(); });
