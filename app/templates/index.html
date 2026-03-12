@@ -4,58 +4,283 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>気象ステーション</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#333}
-header{background:#1a73e8;color:#fff;padding:12px 16px;display:flex;align-items:center;gap:8px}
-header h1{font-size:1.1rem;font-weight:600}
-.status{width:8px;height:8px;border-radius:50%;background:#4caf50;flex-shrink:0}
-.status.offline{background:#f44336}
-/* ダッシュボード — 1カード */
-.current{padding:10px 16px}
-.dash{background:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 1px 4px rgba(0,0,0,.1);display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
-.dash-item{display:flex;align-items:center;gap:3px;padding:2px 4px}
-.dash-sep{width:1px;height:28px;background:#e0e0e0;flex-shrink:0}
-.dash-val{font-size:1.15rem;font-weight:700;transition:color .3s;white-space:nowrap}
-.dash-unit{font-size:.65rem;color:#888;font-weight:400}
-.dash-sub{font-size:.6rem;color:#999;margin-left:2px}
-/* 風向風速コンパス */
-.wind-compass{width:56px;height:56px;flex-shrink:0}
-.wind-compass svg{width:100%;height:100%}
-.wind-center{font-size:10px;font-weight:700;fill:#333}
-.wind-arrow{transition:transform .5s ease}
-/* 雨量円柱 */
-.rain-cylinder{width:36px;height:54px;flex-shrink:0}
-.rain-cylinder svg{width:100%;height:100%}
-.range-bar{display:flex;gap:4px;padding:8px 16px;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.range-bar button{flex-shrink:0;padding:6px 12px;border:1px solid #ddd;border-radius:16px;background:#fff;font-size:.75rem;color:#555;cursor:pointer;transition:all .15s}
-.range-bar button.active{background:#1a73e8;color:#fff;border-color:#1a73e8}
-.range-bar button:hover:not(.active){background:#e8f0fe}
-.snap-toggle{padding:6px 10px;border:1px solid #aaa;border-radius:16px;background:#fff;font-size:.7rem;color:#777;cursor:pointer;transition:all .15s;margin-left:4px;white-space:nowrap}
-.snap-toggle.active{background:#ff9800;color:#fff;border-color:#ff9800}
-.charts{display:grid;grid-template-columns:1fr;gap:10px;padding:0 16px 16px}
-@media(min-width:900px){.charts{grid-template-columns:repeat(2,1fr)}}
-.chart-box{background:#fff;border-radius:8px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);min-width:0}
-.chart-box h2{font-size:.85rem;color:#555;margin-bottom:8px}
-.chart-wrap{position:relative;height:300px}
-.nav-bar{display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 16px}
-.nav-btn{width:28px;height:28px;border:none;background:none;cursor:pointer;color:#555;font-size:0;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
-.nav-btn::after{content:'';display:block;width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent}
-.nav-btn.back::after{border-right:10px solid #555}
-.nav-btn.fwd::after{border-left:10px solid #555}
-.nav-btn:disabled{opacity:.2;cursor:default}
-.nav-btn:not(:disabled):hover{opacity:.6}
-.nav-range{font-size:.8rem;color:#555;min-width:180px;text-align:center}
-.time-info{text-align:center;padding:4px;font-size:.7rem;color:#999}
-.ext-table{width:100%;border-collapse:collapse;font-size:.78rem}
-.ext-table th,.ext-table td{padding:5px 8px;text-align:center;border-bottom:1px solid #eee}
-.ext-table th{background:#f5f7fa;color:#666;font-weight:600}
-.ext-table td:first-child{text-align:left;color:#555;font-weight:500}
-.ext-table tr:last-child td{border-bottom:none}
-.ext-table .hi{color:#e53935}
-.ext-table .lo{color:#1565c0}
+/* ============================================================
+   MD3 Expressive — Design Tokens (Weather Teal Theme)
+   ============================================================ */
+:root {
+  /* Color roles */
+  --md-sys-color-primary: #006874;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #97F0FF;
+  --md-sys-color-on-primary-container: #001F24;
+  --md-sys-color-secondary: #4A6267;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #CDE7EC;
+  --md-sys-color-on-secondary-container: #051F23;
+  --md-sys-color-tertiary: #7E5700;
+  --md-sys-color-tertiary-container: #FFDdb2;
+  --md-sys-color-on-tertiary-container: #271900;
+  --md-sys-color-error: #BA1A1A;
+  --md-sys-color-error-container: #FFDAD6;
+  --md-sys-color-background: #F4FAFB;
+  --md-sys-color-on-background: #171D1E;
+  --md-sys-color-surface: #F4FAFB;
+  --md-sys-color-on-surface: #171D1E;
+  --md-sys-color-surface-variant: #DBE4E6;
+  --md-sys-color-on-surface-variant: #3F4849;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #EEF7F9;
+  --md-sys-color-surface-container: #E8F1F3;
+  --md-sys-color-surface-container-high: #E2ECF0;
+  --md-sys-color-surface-container-highest: #DCE6E8;
+  --md-sys-color-outline: #6F797A;
+  --md-sys-color-outline-variant: #BFC8CA;
+  --md-sys-color-inverse-surface: #2B3133;
+  --md-sys-color-inverse-on-surface: #ECF2F3;
+  --md-sys-color-inverse-primary: #4DD8E8;
+  /* Shape */
+  --md-sys-shape-xs: 4px;
+  --md-sys-shape-sm: 8px;
+  --md-sys-shape-md: 12px;
+  --md-sys-shape-lg: 16px;
+  --md-sys-shape-xl: 28px;
+  --md-sys-shape-full: 9999px;
+  /* Elevation */
+  --md-elev-1: 0 1px 2px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.07);
+  --md-elev-2: 0 1px 2px rgba(0,0,0,.1), 0 2px 6px rgba(0,0,0,.08);
+  --md-elev-3: 0 4px 8px rgba(0,0,0,.09), 0 1px 3px rgba(0,0,0,.07);
+  /* Spring easing (M3 Expressive) */
+  --md-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --md-spring-fast: cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+
+/* === Base === */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--md-sys-color-background);
+  color: var(--md-sys-color-on-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* === Top App Bar (MD3 Small) === */
+header {
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  padding: 0 4px 0 16px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: var(--md-elev-1);
+}
+header h1 { font-size: 1.375rem; font-weight: 400; letter-spacing: 0; flex: 1; }
+.status { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; flex-shrink: 0; }
+.status.offline { background: #ba1a1a; }
+
+/* === Compact Dashboard Card === */
+.current { padding: 12px 16px; }
+.dash {
+  background: var(--md-sys-color-surface-container-lowest);
+  border-radius: var(--md-sys-shape-xl);
+  padding: 12px 16px;
+  box-shadow: var(--md-elev-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.dash-item { display: flex; align-items: center; gap: 4px; padding: 4px 6px; }
+.dash-sep { width: 1px; height: 32px; background: var(--md-sys-color-outline-variant); flex-shrink: 0; }
+.dash-val { font-size: 1.15rem; font-weight: 500; transition: color .3s; white-space: nowrap; }
+.dash-unit { font-size: .65rem; color: var(--md-sys-color-on-surface-variant); font-weight: 400; }
+.dash-sub { font-size: .6rem; color: var(--md-sys-color-on-surface-variant); margin-left: 2px; }
+
+/* === Wind Compass === */
+.wind-compass { width: 56px; height: 56px; flex-shrink: 0; }
+.wind-compass svg { width: 100%; height: 100%; }
+.wind-center { font-size: 10px; font-weight: 500; fill: var(--md-sys-color-on-surface); }
+.wind-arrow { transition: transform .5s var(--md-spring); }
+
+/* === Rain Cylinder === */
+.rain-cylinder { width: 36px; height: 54px; flex-shrink: 0; }
+.rain-cylinder svg { width: 100%; height: 100%; }
+
+/* === Range Bar === */
+.range-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.range-bar::-webkit-scrollbar { display: none; }
+
+/* === Navigation Bar === */
+.nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 16px;
+}
+.nav-range {
+  font-size: .85rem;
+  color: var(--md-sys-color-on-surface-variant);
+  min-width: 190px;
+  text-align: center;
+  font-weight: 400;
+}
+.time-info {
+  text-align: center;
+  padding: 2px 4px 8px;
+  font-size: .7rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* === Chart Grid === */
+.charts { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 0 16px 24px; }
+@media (min-width: 900px) { .charts { grid-template-columns: repeat(2, 1fr); } }
+
+/* MD3 Filled Card */
+.chart-box {
+  background: var(--md-sys-color-surface-container-lowest);
+  border-radius: var(--md-sys-shape-lg);
+  padding: 16px;
+  box-shadow: var(--md-elev-1);
+  min-width: 0;
+  transition: box-shadow .25s var(--md-spring);
+}
+.chart-box:hover { box-shadow: var(--md-elev-2); }
+.chart-box h2 {
+  font-size: .875rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+  margin-bottom: 10px;
+  letter-spacing: .1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chart-wrap { position: relative; height: 300px; }
+
+/* === Extremes Table === */
+.ext-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.ext-table th, .ext-table td { padding: 6px 8px; text-align: center; border-bottom: 1px solid var(--md-sys-color-outline-variant); }
+.ext-table th { background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface-variant); font-weight: 500; }
+.ext-table td:first-child { text-align: left; color: var(--md-sys-color-on-surface-variant); font-weight: 500; }
+.ext-table tr:last-child td { border-bottom: none; }
+.ext-table .hi { color: #C00010; }
+.ext-table .lo { color: #0061A4; }
+
+/* === Icon Button (MD3 Standard) === */
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--md-sys-shape-full);
+  border: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.icon-btn:hover { background: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 8%, transparent); }
+.icon-btn:active { background: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 12%, transparent); }
+.icon-btn:disabled { opacity: .38; cursor: default; }
+.icon-btn:disabled:hover { background: transparent; }
+.icon-btn .material-symbols-outlined { font-size: 24px; }
+
+/* === Toggle Switch (MD3) === */
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--md-sys-color-surface-variant);
+  border: 2px solid var(--md-sys-color-outline);
+  border-radius: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .2s, border-color .2s;
+}
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--md-sys-color-outline);
+  transition: transform .25s var(--md-spring-fast), background .2s, width .15s, height .15s;
+}
+.toggle-switch:checked {
+  background: var(--md-sys-color-primary);
+  border-color: var(--md-sys-color-primary);
+}
+.toggle-switch:checked::after {
+  transform: translateX(20px);
+  background: var(--md-sys-color-on-primary);
+  width: 14px;
+  height: 14px;
+}
+
+/* === Range / Snap Chip buttons (MD3 Filter Chip style) === */
+.range-chip {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--md-sys-shape-sm);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-family: 'Roboto', sans-serif;
+  font-size: .8rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background .15s, color .15s, border-color .15s var(--md-spring-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.range-chip:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 8%, transparent);
+}
+.range-chip.selected {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  border-color: var(--md-sys-color-primary);
+}
+.range-chip.selected::before {
+  content: 'check';
+  font-family: 'Material Symbols Outlined';
+  font-size: 16px;
+  line-height: 1;
+}
+#snapToggle.selected {
+  background: var(--md-sys-color-tertiary);
+  border-color: var(--md-sys-color-tertiary);
+  color: #ffffff;
+}
 </style>
 </head>
 <body>
@@ -66,10 +291,16 @@ header h1{font-size:1.1rem;font-weight:600}
 
 <div class="current">
 <div class="dash" id="currentCards">
-  <!-- 気温: 温度計+数値 -->
-  <div class="dash-item">
-    <svg viewBox="0 0 24 40" width="20" height="34"><rect x="9" y="2" width="6" height="26" rx="3" fill="#eee" stroke="#bbb" stroke-width="1"/><rect id="thermo-fill" x="10" y="18" width="4" height="10" rx="2" fill="#e53935"/><circle cx="12" cy="32" r="5" fill="#e53935" stroke="#bbb" stroke-width="1"/></svg>
-    <span class="dash-val" id="cur-temp">--</span><span class="dash-unit">°C</span>
+  <!-- 気温: 温度計+数値+体感温度 -->
+  <div class="dash-item" style="flex-direction:column;align-items:flex-start;gap:2px">
+    <div style="display:flex;align-items:center;gap:3px">
+      <svg viewBox="0 0 24 40" width="20" height="34"><rect x="9" y="2" width="6" height="26" rx="3" fill="#eee" stroke="#bbb" stroke-width="1"/><rect id="thermo-fill" x="10" y="18" width="4" height="10" rx="2" fill="#e53935"/><circle cx="12" cy="32" r="5" fill="#e53935" stroke="#bbb" stroke-width="1"/></svg>
+      <span class="dash-val" id="cur-temp">--</span><span class="dash-unit">°C</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:3px;padding-left:1px">
+      <svg viewBox="0 0 14 20" width="11" height="16"><circle cx="7" cy="4" r="3" fill="#bbb"/><path d="M3 20 Q3 12 7 10 Q11 12 11 20Z" fill="#bbb"/></svg>
+      <span id="cur-feels" style="font-size:.85rem;color:#666">--</span><span class="dash-unit">°C</span>
+    </div>
   </div>
   <div class="dash-sep"></div>
   <!-- 湿度: 水滴+数値 -->
@@ -111,13 +342,17 @@ header h1{font-size:1.1rem;font-weight:600}
         <text x="72" y="43" text-anchor="middle" font-size="8" fill="#999">E</text>
         <text x="40" y="76" text-anchor="middle" font-size="8" fill="#999">S</text>
         <text x="8" y="43" text-anchor="middle" font-size="8" fill="#999">W</text>
-        <g id="wind-arrow" class="wind-arrow" transform="rotate(0,40,40)">
-          <polygon points="40,8 35,24 40,20 45,24" fill="#e53935" opacity="0.85"/>
-          <line x1="40" y1="20" x2="40" y2="56" stroke="#e53935" stroke-width="2" opacity="0.5"/>
+        <g id="wind-arrow" class="wind-arrow" transform="translate(40,40) rotate(0)">
+          <path d="M-6 24 L-6 -7 L-14 -7 L0 -26 L14 -7 L6 -7 L6 24 Z" fill="rgba(69,90,100,0.5)"/>
         </g>
         <text id="wind-spd-txt" class="wind-center" x="40" y="44" text-anchor="middle">--</text>
       </svg>
     </div>
+  </div>
+  <div class="dash-sep"></div>
+  <!-- 大気圧: バロメータゲージ -->
+  <div class="dash-item" style="padding:0 2px">
+    <svg id="baro-gauge" viewBox="0 0 72 58" width="72" height="58"></svg>
   </div>
   <div class="dash-sep"></div>
   <!-- 照度: 太陽+数値 -->
@@ -131,32 +366,26 @@ header h1{font-size:1.1rem;font-weight:600}
     <svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="10" fill="none" stroke="#8e24aa" stroke-width="2" stroke-dasharray="4 2"/><text x="16" y="20" text-anchor="middle" font-size="11" font-weight="bold" fill="#8e24aa">UV</text></svg>
     <span class="dash-val" id="cur-uv">--</span>
   </div>
-  <div class="dash-sep"></div>
-  <!-- 大気圧: 気圧計アイコン+数値+傾向矢印 -->
-  <div class="dash-item">
-    <svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="12" fill="none" stroke="#607d8b" stroke-width="1.5"/><path d="M16 16 L16 7" stroke="#607d8b" stroke-width="2" stroke-linecap="round"/><path d="M16 16 L22 14" stroke="#90a4ae" stroke-width="1.5" stroke-linecap="round"/><circle cx="16" cy="16" r="2" fill="#607d8b"/></svg>
-    <span class="dash-val" id="cur-press">--</span><span class="dash-unit">hPa</span>
-    <svg id="press-trend" viewBox="0 0 16 16" width="14" height="14" style="margin-left:2px"><path d="M8 2 L8 14" stroke="#999" stroke-width="2" stroke-linecap="round"/></svg>
-  </div>
 </div>
 </div>
 
 <div class="range-bar" id="rangeBar">
-  <button data-hours="6">6時間</button>
-  <button data-hours="12">12時間</button>
-  <button data-hours="24" class="active">24時間</button>
-  <button data-hours="48">48時間</button>
-  <button data-hours="72">72時間</button>
-  <button data-hours="168">7日間</button>
-  <button data-hours="336">14日間</button>
-  <button data-hours="744">1ヶ月</button>
-  <button class="snap-toggle" id="snapToggle">0時基準</button>
+  <button class="icon-btn" id="resetBtn" title="現在時刻に戻す"><span class="material-symbols-outlined">refresh</span></button>
+  <button class="range-chip" data-hours="6">6時間</button>
+  <button class="range-chip" data-hours="12">12時間</button>
+  <button class="range-chip selected" data-hours="24">24時間</button>
+  <button class="range-chip" data-hours="48">48時間</button>
+  <button class="range-chip" data-hours="72">72時間</button>
+  <button class="range-chip" data-hours="168">7日間</button>
+  <button class="range-chip" data-hours="336">14日間</button>
+  <button class="range-chip" data-hours="744">1ヶ月</button>
+  <button class="range-chip" id="snapToggle">0時基準</button>
 </div>
 
 <div class="nav-bar">
-  <button class="nav-btn back" id="navBack" aria-label="戻る"></button>
+  <button class="icon-btn" id="navBack" aria-label="戻る"><span class="material-symbols-outlined">chevron_left</span></button>
   <span class="nav-range" id="navRange"></span>
-  <button class="nav-btn fwd" id="navFwd" aria-label="進む" disabled></button>
+  <button class="icon-btn" id="navFwd" aria-label="進む" disabled><span class="material-symbols-outlined">chevron_right</span></button>
 </div>
 <div class="time-info" id="timeInfo">データなし</div>
 
@@ -177,7 +406,7 @@ header h1{font-size:1.1rem;font-weight:600}
       </tbody>
     </table>
   </div>
-  <div class="chart-box"><h2>気温</h2><div class="chart-wrap"><canvas id="chartTemp"></canvas></div></div>
+  <div class="chart-box"><h2>気温 <label style="font-size:.7rem;font-weight:400;margin-left:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" class="toggle-switch" id="dewToggle"> 露点</label></h2><div class="chart-wrap"><canvas id="chartTemp"></canvas></div></div>
   <div class="chart-box"><h2>湿度</h2><div class="chart-wrap"><canvas id="chartHum"></canvas></div></div>
   <div class="chart-box"><h2>雨量</h2><div class="chart-wrap"><canvas id="chartRain"></canvas></div></div>
   <div class="chart-box"><h2>風速</h2><div class="chart-wrap"><canvas id="chartWind"></canvas></div></div>
@@ -218,6 +447,63 @@ function dirLabel(deg) {
   const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
   return dirs[Math.round(deg / 22.5) % 16];
 }
+// --- バロメータゲージ ---
+function initBaroGauge() {
+  const svg = document.getElementById('baro-gauge');
+  if (!svg || svg.dataset.inited) return;
+  svg.dataset.inited = '1';
+  const cx = 36, cy = 33, R = 27;
+  const minP = 970, maxP = 1050, minA = -110, maxA = 110;
+  function pt(a) {
+    const r = a * Math.PI / 180;
+    return [cx + R * Math.sin(r), cy - R * Math.cos(r)];
+  }
+  const [sx, sy] = pt(minA), [ex, ey] = pt(maxA);
+  let s = '';
+  // 目盛り弧
+  s += `<path d="M${sx.toFixed(2)} ${sy.toFixed(2)} A${R} ${R} 0 1 1 ${ex.toFixed(2)} ${ey.toFixed(2)}" fill="none" stroke="#e8e8e8" stroke-width="4"/>`;
+  // 目盛り線
+  for (let p = minP; p <= maxP; p += 5) {
+    const isMajor = p % 10 === 0;
+    const a = minA + (p - minP) / (maxP - minP) * (maxA - minA);
+    const rad = a * Math.PI / 180;
+    const r0 = R, r1 = R - (isMajor ? 6 : 3);
+    const x1 = cx + r0 * Math.sin(rad), y1 = cy - r0 * Math.cos(rad);
+    const x2 = cx + r1 * Math.sin(rad), y2 = cy - r1 * Math.cos(rad);
+    s += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${isMajor ? '#bbb' : '#ddd'}" stroke-width="${isMajor ? 1.5 : 1}"/>`;
+  }
+  // トレンド矢印（先に描画→テキストの奥に）
+  // 回転0°=真上(↑)→90°=右(→)→180°=真下(↓)、初期90°
+  // 柄の中点=正円中心(cx,cy)、全長40px(±20)
+  // ボディ幅8px(±4)、矢じり幅20px(±10)
+  s += `<g id="baro-trend" transform="translate(${cx},${cy}) rotate(90)"><path d="M-4 20 L-4 -6 L-10 -6 L0 -20 L10 -6 L4 -6 L4 20 Z" fill="rgba(180,180,180,0.35)"/></g>`;
+  // 数値（正円の中央、矢印より手前）
+  s += `<text id="baro-val" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="bold" fill="#333">--</text>`;
+  s += `<text x="${cx}" y="55" text-anchor="middle" font-size="6.5" fill="#aaa">hPa</text>`;
+  svg.innerHTML = s;
+}
+function updateBaroGauge(pressure, slope6h) {
+  initBaroGauge();
+  const valEl = document.getElementById('baro-val');
+  if (valEl) valEl.textContent = pressure != null ? pressure.toFixed(1) : '--';
+  const trendG = document.getElementById('baro-trend');
+  if (trendG) {
+    // +10hPa/6h→0°(↑), 0→90°(→), -10hPa/6h→180°(↓)
+    let rotation = 90, color = 'rgba(180,180,180,0.35)';
+    if (slope6h != null) {
+      rotation = Math.max(0, Math.min(180, 90 - (slope6h / 10) * 90));
+      const t = Math.min(1, Math.abs(slope6h) / 10);
+      if (t >= 0.05) {
+        const cr = Math.round(21 + t * 208);
+        const cg = Math.round(101 - t * 44);
+        const cb = Math.round(192 - t * 139);
+        color = `rgba(${cr},${cg},${cb},0.45)`;
+      }
+    }
+    trendG.setAttribute('transform', `translate(36,33) rotate(${rotation.toFixed(1)})`);
+    trendG.innerHTML = `<path d="M-4 20 L-4 -6 L-10 -6 L0 -20 L10 -6 L4 -6 L4 20 Z" fill="${color}"/>`;
+  }
+}
 // --- 現在値パネル更新 ---
 function updateCurrent(r) {
   // 気温
@@ -231,6 +517,17 @@ function updateCurrent(r) {
     tf.setAttribute('height', h.toFixed(1));
     tf.setAttribute('y', (28 - h).toFixed(1));
     tf.setAttribute('fill', tempColor(r.temperature));
+  }
+  // 体感温度 (Australian Apparent Temperature)
+  const feelsEl = document.getElementById('cur-feels');
+  if (feelsEl) {
+    if (r.temperature != null) {
+      const T = r.temperature, rh = r.humidity ?? 50, ws = r.wind_avg ?? 0;
+      const e = rh / 100 * 6.105 * Math.exp(17.27 * T / (237.7 + T));
+      const at = T + 0.33 * e - 0.70 * ws - 4.0;
+      feelsEl.textContent = at.toFixed(1);
+      feelsEl.style.color = tempColor(at);
+    } else { feelsEl.textContent = '--'; }
   }
   // 湿度
   const hEl = document.getElementById('cur-hum');
@@ -261,7 +558,20 @@ function updateCurrent(r) {
   }
   // 風向風速 — コンパス
   const arrow = document.getElementById('wind-arrow');
-  if (arrow && r.wind_dir != null) arrow.setAttribute('transform', 'rotate(' + r.wind_dir + ',40,40)');
+  if (arrow) {
+    if (r.wind_dir != null) arrow.setAttribute('transform', 'translate(40,40) rotate(' + r.wind_dir + ')');
+    // 風速で矢印の色を変化 (m/s): 無風=青灰 → 強風=赤
+    const ws = r.wind_avg;
+    let wColor;
+    if (ws == null)    wColor = 'rgba(120,140,150,0.4)';
+    else if (ws < 2)   wColor = 'rgba(100,181,246,0.55)';  // 弱: 水色
+    else if (ws < 5)   wColor = 'rgba(76,175,80,0.6)';     // 並: 緑
+    else if (ws < 10)  wColor = 'rgba(255,193,7,0.65)';    // やや強: 黄
+    else if (ws < 15)  wColor = 'rgba(255,152,0,0.7)';     // 強: オレンジ
+    else               wColor = 'rgba(229,57,53,0.75)';    // 暴風: 赤
+    const arrowPath = arrow.querySelector('path');
+    if (arrowPath) arrowPath.setAttribute('fill', wColor);
+  }
   const wsTxt = document.getElementById('wind-spd-txt');
   if (wsTxt) wsTxt.textContent = r.wind_avg != null ? r.wind_avg.toFixed(1) : '--';
   // 照度
@@ -272,27 +582,29 @@ function updateCurrent(r) {
   if (r.uv_index != null) {
     uvEl.style.color = r.uv_index < 3 ? '#43a047' : r.uv_index < 6 ? '#ef6c00' : r.uv_index < 8 ? '#e53935' : '#7b1fa2';
   }
-  // 大気圧 + 6時間傾向
-  document.getElementById('cur-press').textContent = r.pressure != null ? r.pressure.toFixed(1) : '--';
-  const trendSvg = document.getElementById('press-trend');
-  if (trendSvg) {
+  // 大気圧ゲージ + 6時間傾向（最小二乗法）
+  {
     const pData = chartPress.data.datasets[0].data;
     const nowMs = r.recorded_at * 1000;
     const ago6h = nowMs - 6 * 3600000;
-    // 6時間前付近のデータを探す
-    let oldP = null;
+    const pts = [];
     for (let i = 0; i < pData.length; i++) {
       const px = pData[i].x instanceof Date ? pData[i].x.getTime() : pData[i].x;
-      if (px >= ago6h) { oldP = pData[i].y; break; }
+      if (px >= ago6h && pData[i].y != null) pts.push({ x: px, y: pData[i].y });
     }
-    let path, color;
-    if (oldP != null && r.pressure != null) {
-      const diff = r.pressure - oldP;
-      if (diff > 1) { path = 'M8 13 L8 3 M4 7 L8 3 L12 7'; color = '#e53935'; }       // 上昇
-      else if (diff < -1) { path = 'M8 3 L8 13 M4 9 L8 13 L12 9'; color = '#1565c0'; }  // 下降
-      else { path = 'M2 8 L14 8'; color = '#999'; }                                       // 横ばい
-    } else { path = 'M2 8 L14 8'; color = '#ccc'; }
-    trendSvg.innerHTML = '<path d="' + path + '" stroke="' + color + '" stroke-width="2" stroke-linecap="round" fill="none"/>';
+    let slope6h = null;
+    if (pts.length >= 2) {
+      const x0 = pts[0].x;
+      let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+      const n = pts.length;
+      for (const p of pts) {
+        const xh = (p.x - x0) / 3600000;
+        sumX += xh; sumY += p.y; sumXY += xh * p.y; sumX2 += xh * xh;
+      }
+      const denom = n * sumX2 - sumX * sumX;
+      if (denom !== 0) slope6h = (n * sumXY - sumX * sumY) / denom * 6;
+    }
+    updateBaroGauge(r.pressure, slope6h);
   }
   // 更新時刻
   document.getElementById('timeInfo').textContent = '最終更新: ' + ts(r.recorded_at).toLocaleString('ja-JP');
@@ -511,7 +823,10 @@ function yGridWidth(majorStep, extraZero) {
 // --- グラフ初期化 ---
 const chartTemp = new Chart(document.getElementById('chartTemp'), {
   type: 'line',
-  data: { datasets: [ mkDataset('気温 (°C)', '#e53935', 'y') ]},
+  data: { datasets: [
+    mkDataset('気温 (°C)', '#e53935', 'y'),
+    { ...mkDataset('露点温度 (°C)', '#0288d1', 'y'), hidden: true },
+  ]},
   options: {
     ...commonOpts('°C'),
     scales: {
@@ -720,6 +1035,10 @@ function pushPoint(r) {
   if (r.rainfall_delta != null) rainAccum += r.rainfall_delta;
 
   chartTemp.data.datasets[0].data.push({ x: t, y: r.temperature });
+  // 露点温度 (Magnus近似: Td = T - (100-RH)/5)
+  const dewPt = (r.temperature != null && r.humidity != null)
+    ? r.temperature - (100 - r.humidity) / 5 : null;
+  chartTemp.data.datasets[1].data.push({ x: t, y: dewPt });
   chartHum.data.datasets[0].data.push({ x: t, y: r.humidity });
   chartRain.data.datasets[0].data.push({ x: t, y: r.rainfall_rate });
   chartRain.data.datasets[1].data.push({ x: t, y: rainAccum });
@@ -778,6 +1097,16 @@ function updateNav() {
   document.getElementById('navFwd').disabled = (timeOffset >= 0);
 }
 
+document.getElementById('resetBtn').addEventListener('click', () => {
+  timeOffset = 0;
+  snapToZero = false;
+  document.getElementById('snapToggle').classList.remove('selected');
+  loadData(currentRangeHours);
+});
+document.getElementById('dewToggle').addEventListener('change', function() {
+  chartTemp.data.datasets[1].hidden = !this.checked;
+  chartTemp.update();
+});
 document.getElementById('navBack').addEventListener('click', () => {
   timeOffset -= currentRangeHours * 3600000;
   loadData(currentRangeHours);
@@ -833,12 +1162,12 @@ function loadData(hours) {
     });
 }
 
-// --- 範囲切替ボタン ---
+// --- 範囲切替チップ ---
 document.getElementById('rangeBar').addEventListener('click', e => {
-  const btn = e.target.closest('button[data-hours]');
+  const btn = e.target.closest('.range-chip[data-hours]');
   if (!btn) return;
-  document.querySelectorAll('#rangeBar button[data-hours]').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  document.querySelectorAll('#rangeBar .range-chip[data-hours]').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
   timeOffset = 0;
   loadData(parseInt(btn.dataset.hours));
 });
@@ -846,7 +1175,7 @@ document.getElementById('rangeBar').addEventListener('click', e => {
 // --- 0時基準トグル ---
 document.getElementById('snapToggle').addEventListener('click', () => {
   snapToZero = !snapToZero;
-  document.getElementById('snapToggle').classList.toggle('active', snapToZero);
+  document.getElementById('snapToggle').classList.toggle('selected', snapToZero);
   timeOffset = 0;
   loadData(currentRangeHours);
 });
