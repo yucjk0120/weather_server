@@ -6,4 +6,5 @@ services:
     volumes:
       - ./data:/app/data
       - ./app/templates:/app/app/templates
+      - ./app/static:/app/app/static
     restart: unless-stopped

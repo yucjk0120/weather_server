@@ -4,7 +4,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
@@ -29,6 +30,10 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Weather Station API", lifespan=lifespan)
 
+_static_dir = Path(__file__).parent / "static"
+if _static_dir.is_dir():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
 templates = Jinja2Templates(
     directory=str(Path(__file__).parent / "templates")
 )
@@ -40,6 +45,17 @@ templates = Jinja2Templates(
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(request, "index.html")
+
+
+@app.get("/service-worker.js")
+async def service_worker():
+    """Serve SW from root scope so it can control '/'."""
+    sw_path = Path(__file__).parent / "static" / "service-worker.js"
+    return FileResponse(
+        sw_path,
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"},
+    )
 
 
 # --- API ---
