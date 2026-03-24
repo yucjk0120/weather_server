@@ -10,7 +10,8 @@
 <!-- PWA -->
 <link rel="manifest" href="/static/manifest.json">
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
-<meta name="theme-color" content="#006A6A">
+<meta name="theme-color" content="#006A6A" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1B2122" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="気象ステーション">
@@ -67,6 +68,69 @@
   /* Spring easing (M3 Expressive) */
   --md-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
   --md-spring-fast: cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+
+/* ============================================================
+   MD3 Dark Theme (system preference)
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --md-sys-color-primary: #4DD8E8;
+    --md-sys-color-on-primary: #00363D;
+    --md-sys-color-primary-container: #004F58;
+    --md-sys-color-on-primary-container: #97F0FF;
+    --md-sys-color-secondary: #B1CBD0;
+    --md-sys-color-on-secondary: #1C3438;
+    --md-sys-color-secondary-container: #334B4F;
+    --md-sys-color-on-secondary-container: #CDE7EC;
+    --md-sys-color-tertiary: #F0BF48;
+    --md-sys-color-tertiary-container: #5C4200;
+    --md-sys-color-on-tertiary-container: #FFDdb2;
+    --md-sys-color-error: #FFB4AB;
+    --md-sys-color-error-container: #93000A;
+    --md-sys-color-background: #0E1415;
+    --md-sys-color-on-background: #DCE6E8;
+    --md-sys-color-surface: #0E1415;
+    --md-sys-color-on-surface: #DCE6E8;
+    --md-sys-color-surface-variant: #3F4849;
+    --md-sys-color-on-surface-variant: #BFC8CA;
+    --md-sys-color-surface-container-lowest: #111819;
+    --md-sys-color-surface-container-low: #171D1E;
+    --md-sys-color-surface-container: #1B2122;
+    --md-sys-color-surface-container-high: #252B2C;
+    --md-sys-color-surface-container-highest: #303637;
+    --md-sys-color-outline: #899393;
+    --md-sys-color-outline-variant: #3F4849;
+    --md-sys-color-inverse-surface: #DCE6E8;
+    --md-sys-color-inverse-on-surface: #2B3133;
+    --md-sys-color-inverse-primary: #006874;
+    --md-elev-1: 0 1px 3px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4);
+    --md-elev-2: 0 2px 6px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4);
+    --md-elev-3: 0 4px 8px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.4);
+  }
+  /* Extremes table */
+  .ext-table .hi { color: #FF8A80; }
+  .ext-table .lo { color: #82B1FF; }
+  /* Inline style overrides */
+  #cur-feels { color: var(--md-sys-color-on-surface-variant) !important; }
+  /* Wind compass SVG */
+  .wind-compass circle { stroke: var(--md-sys-color-outline-variant); }
+  .wind-compass > svg > text { fill: var(--md-sys-color-outline); }
+  .wind-center { fill: var(--md-sys-color-on-surface) !important; }
+  /* Rain cylinder SVG */
+  .rain-cylinder ellipse { stroke: #444; }
+  .rain-cylinder ellipse[fill="#e8e8e8"] { fill: #252B2C; }
+  .rain-cylinder ellipse[fill="#f5f5f5"] { fill: #1B2122; }
+  .rain-cylinder rect[fill="#f0f0f0"] { fill: #1B2122; }
+  .rain-cylinder line { stroke: #444; }
+  #rain-cyl-text { fill: #82B1FF; }
+  .rain-cylinder text[fill="#888"] { fill: #899393; }
+  /* Thermometer SVG */
+  svg rect[fill="#eee"] { fill: #303637; }
+  svg rect[fill="#eee"][stroke="#bbb"],
+  svg circle[stroke="#bbb"] { stroke: #555; }
+  /* Person/feels icon */
+  svg circle[fill="#bbb"], svg path[fill="#bbb"] { fill: #666; }
 }
 
 /* === Base === */
@@ -430,26 +494,28 @@ header h1 { font-size: 1.375rem; font-weight: 400; letter-spacing: 0; flex: 1; }
 const ts = v => new Date(v * 1000);
 const fmt = v => v != null ? v.toFixed(1) : '--';
 const allCharts = [];
+const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+let isDark = darkMQ.matches;
 let currentRangeHours = 24;
 let timeOffset = 0; // ms, 0=現在, 負=過去
 let snapToZero = false; // 0時基準モード
 
 // --- 温度帯カラー ---
 function tempColor(t) {
-  if (t == null) return '#333';
-  if (t < 0) return '#1565c0';
+  if (t == null) return isDark ? '#aaa' : '#333';
+  if (t < 0) return isDark ? '#64b5f6' : '#1565c0';
   if (t < 10) return '#42a5f5';
-  if (t < 20) return '#43a047';
-  if (t < 30) return '#ef6c00';
-  return '#c62828';
+  if (t < 20) return isDark ? '#66bb6a' : '#43a047';
+  if (t < 30) return isDark ? '#ffa726' : '#ef6c00';
+  return isDark ? '#ef5350' : '#c62828';
 }
 // --- 湿度カラー ---
 function humColor(h) {
-  if (h == null) return '#333';
-  if (h < 30) return '#ef6c00';
-  if (h < 60) return '#43a047';
+  if (h == null) return isDark ? '#aaa' : '#333';
+  if (h < 30) return isDark ? '#ffa726' : '#ef6c00';
+  if (h < 60) return isDark ? '#66bb6a' : '#43a047';
   if (h < 80) return '#1e88e5';
-  return '#1565c0';
+  return isDark ? '#64b5f6' : '#1565c0';
 }
 // --- 風向ラベル ---
 function dirLabel(deg) {
@@ -460,8 +526,7 @@ function dirLabel(deg) {
 // --- バロメータゲージ ---
 function initBaroGauge() {
   const svg = document.getElementById('baro-gauge');
-  if (!svg || svg.dataset.inited) return;
-  svg.dataset.inited = '1';
+  if (!svg) return;
   const cx = 36, cy = 33, R = 27;
   const minP = 970, maxP = 1050, minA = -110, maxA = 110;
   function pt(a) {
@@ -471,7 +536,10 @@ function initBaroGauge() {
   const [sx, sy] = pt(minA), [ex, ey] = pt(maxA);
   let s = '';
   // 目盛り弧
-  s += `<path d="M${sx.toFixed(2)} ${sy.toFixed(2)} A${R} ${R} 0 1 1 ${ex.toFixed(2)} ${ey.toFixed(2)}" fill="none" stroke="#e8e8e8" stroke-width="4"/>`;
+  const arcC = isDark ? '#333' : '#e8e8e8';
+  const majC = isDark ? '#666' : '#bbb';
+  const minC = isDark ? '#444' : '#ddd';
+  s += `<path d="M${sx.toFixed(2)} ${sy.toFixed(2)} A${R} ${R} 0 1 1 ${ex.toFixed(2)} ${ey.toFixed(2)}" fill="none" stroke="${arcC}" stroke-width="4"/>`;
   // 目盛り線
   for (let p = minP; p <= maxP; p += 5) {
     const isMajor = p % 10 === 0;
@@ -480,7 +548,7 @@ function initBaroGauge() {
     const r0 = R, r1 = R - (isMajor ? 6 : 3);
     const x1 = cx + r0 * Math.sin(rad), y1 = cy - r0 * Math.cos(rad);
     const x2 = cx + r1 * Math.sin(rad), y2 = cy - r1 * Math.cos(rad);
-    s += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${isMajor ? '#bbb' : '#ddd'}" stroke-width="${isMajor ? 1.5 : 1}"/>`;
+    s += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${isMajor ? majC : minC}" stroke-width="${isMajor ? 1.5 : 1}"/>`;
   }
   // トレンド矢印（先に描画→テキストの奥に）
   // 回転0°=真上(↑)→90°=右(→)→180°=真下(↓)、初期90°
@@ -488,8 +556,10 @@ function initBaroGauge() {
   // ボディ幅8px(±4)、矢じり幅20px(±10)
   s += `<g id="baro-trend" transform="translate(${cx},${cy}) rotate(90)"><path d="M-4 20 L-4 -6 L-10 -6 L0 -20 L10 -6 L4 -6 L4 20 Z" fill="rgba(180,180,180,0.35)"/></g>`;
   // 数値（正円の中央、矢印より手前）
-  s += `<text id="baro-val" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="bold" fill="#333">--</text>`;
-  s += `<text x="${cx}" y="55" text-anchor="middle" font-size="6.5" fill="#aaa">hPa</text>`;
+  const valC = isDark ? '#DCE6E8' : '#333';
+  const lblC = isDark ? '#777' : '#aaa';
+  s += `<text id="baro-val" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="bold" fill="${valC}">--</text>`;
+  s += `<text x="${cx}" y="55" text-anchor="middle" font-size="6.5" fill="${lblC}">hPa</text>`;
   svg.innerHTML = s;
 }
 function updateBaroGauge(pressure, slope6h) {
@@ -692,7 +762,7 @@ const zebraPlugin = {
         const x1 = Math.max(xScale.getPixelForValue(t), left);
         const x2 = Math.min(xScale.getPixelForValue(next), right);
         if (x2 > x1) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+          ctx.fillStyle = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
           ctx.fillRect(x1, top, x2 - x1, bottom - top);
         }
       }
@@ -764,7 +834,7 @@ const nightPlugin = {
 
     // 日没→翌日出 のペアを描画
     ctx.save();
-    ctx.fillStyle = 'rgba(15, 15, 50, 0.13)';
+    ctx.fillStyle = isDark ? 'rgba(0,0,0,0.3)' : 'rgba(15,15,50,0.13)';
     for (let i = 0; i < events.length - 1; i++) {
       if (events[i].type === 's' && events[i + 1].type === 'r') {
         const ns = Math.max(events[i].t, xScale.min);
@@ -799,9 +869,10 @@ const commonOpts = (yLabel) => ({
         displayFormats: { minute: 'HH:mm', hour: 'HH:mm', day: 'M/d' }
       },
       ticks: { autoSkip: false, maxRotation: 0, font: { size: 10 } },
-      grid: { color: '#e0e0e0' }
+      grid: { color: () => isDark ? '#2a2a2a' : '#e0e0e0' },
+      ticks: { autoSkip: false, maxRotation: 0, font: { size: 10 }, color: () => isDark ? '#999' : '#666' }
     },
-    y: { title: { display: true, text: yLabel, font: { size: 10 } }, ticks: { font: { size: 10 } } }
+    y: { title: { display: true, text: yLabel, font: { size: 10 }, color: () => isDark ? '#999' : '#666' }, ticks: { font: { size: 10 }, color: () => isDark ? '#999' : '#666' } }
   },
   plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } },
   elements: { point: { radius: 0 }, line: { borderWidth: 1.5 } }
@@ -813,11 +884,11 @@ const mkDataset = (label, color, yAxisID) => ({ label, borderColor: color, backg
 // majorStep 毎に強調線、extraZero=true なら 0 を更に強調
 function yGridColor(majorStep, extraZero) {
   return function(ctx) {
-    if (!ctx.tick) return '#e0e0e0';
+    if (!ctx.tick) return isDark ? '#2a2a2a' : '#e0e0e0';
     const v = ctx.tick.value;
-    if (extraZero && v === 0) return 'rgba(0,0,200,0.6)';
-    if (v % majorStep === 0) return 'rgba(0,0,0,0.3)';
-    return '#e0e0e0';
+    if (extraZero && v === 0) return isDark ? 'rgba(100,160,255,0.5)' : 'rgba(0,0,200,0.6)';
+    if (v % majorStep === 0) return isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.3)';
+    return isDark ? '#2a2a2a' : '#e0e0e0';
   };
 }
 function yGridWidth(majorStep, extraZero) {
@@ -953,7 +1024,7 @@ const chartWindDir = new Chart(document.getElementById('chartWindDir'), {
           callback: v => ({0:'N',90:'E',180:'S',270:'W',360:'N'})[v] || '',
           font: { size: 10 }
         },
-        grid: { color: '#e0e0e0' }
+        grid: { color: () => isDark ? '#2a2a2a' : '#e0e0e0' }
       }
     },
     elements: { point: { radius: 2 } }
@@ -1018,7 +1089,7 @@ function applyTimeAxis(hours) {
     x.time.tooltipFormat = cfg.tipFmt;
     x.time.displayFormats = fmtObj;
     x.ticks.callback = tickCb;
-    x.grid.color = '#bbb';
+    x.grid.color = isDark ? '#444' : '#bbb';
   });
 }
 
@@ -1297,6 +1368,18 @@ function loadExtremes() {
 loadExtremes();
 // 5分ごとに更新
 setInterval(loadExtremes, 300000);
+
+// --- ダークモード切替検知 ---
+darkMQ.addEventListener('change', () => {
+  isDark = darkMQ.matches;
+  // バロメーターゲージ再描画
+  initBaroGauge();
+  // グラフ再描画
+  applyTimeAxis(currentRangeHours);
+  updateCharts();
+  // ダッシュボード色更新
+  fetchDashboard();
+});
 </script>
 <!-- Service Worker Registration -->
 <script>
