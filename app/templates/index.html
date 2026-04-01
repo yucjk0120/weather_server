@@ -355,6 +355,66 @@ header h1 { font-size: 1.375rem; font-weight: 400; letter-spacing: 0; flex: 1; }
   border-color: var(--md-sys-color-tertiary);
   color: #ffffff;
 }
+
+/* === Data Table Overlay === */
+.tbl-btn {
+  width: 28px; height: 28px; border-radius: var(--md-sys-shape-full);
+  border: none; background: transparent; color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  margin-left: auto; flex-shrink: 0; transition: background .15s;
+}
+.tbl-btn:hover { background: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 8%, transparent); }
+.tbl-btn .material-symbols-outlined { font-size: 18px; }
+.data-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; visibility: hidden;
+  transition: opacity .2s, visibility .2s;
+}
+.data-overlay.open { opacity: 1; visibility: visible; }
+.data-modal {
+  background: var(--md-sys-color-surface-container-low);
+  border-radius: var(--md-sys-shape-xl);
+  box-shadow: var(--md-elev-3);
+  width: min(92vw, 720px);
+  max-height: 80vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  animation: modalIn .25s var(--md-spring);
+}
+@keyframes modalIn { from { transform: scale(.92); opacity: 0; } }
+.data-modal-head {
+  display: flex; align-items: center; padding: 16px 16px 12px;
+  gap: 12px; flex-shrink: 0;
+}
+.data-modal-head h3 {
+  flex: 1; font-size: 1.1rem; font-weight: 500;
+  color: var(--md-sys-color-on-surface);
+}
+.data-modal-body { overflow: auto; padding: 0 16px 16px; flex: 1; }
+.data-tbl {
+  width: 100%; border-collapse: collapse; font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+.data-tbl th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 500; text-align: right; padding: 6px 10px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+.data-tbl th:first-child { text-align: left; }
+.data-tbl td {
+  padding: 4px 10px; text-align: right;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface);
+}
+.data-tbl td:first-child {
+  text-align: left; color: var(--md-sys-color-on-surface-variant);
+  white-space: nowrap;
+}
+.data-tbl tbody tr:hover { background: color-mix(in srgb, var(--md-sys-color-primary) 6%, transparent); }
 </style>
 </head>
 <body>
@@ -480,14 +540,26 @@ header h1 { font-size: 1.375rem; font-weight: 400; letter-spacing: 0; flex: 1; }
       </tbody>
     </table>
   </div>
-  <div class="chart-box"><h2>気温 <label style="font-size:.7rem;font-weight:400;margin-left:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" class="toggle-switch" id="dewToggle"> 露点</label></h2><div class="chart-wrap"><canvas id="chartTemp"></canvas></div></div>
-  <div class="chart-box"><h2>湿度</h2><div class="chart-wrap"><canvas id="chartHum"></canvas></div></div>
-  <div class="chart-box"><h2>雨量</h2><div class="chart-wrap"><canvas id="chartRain"></canvas></div></div>
-  <div class="chart-box"><h2>風速</h2><div class="chart-wrap"><canvas id="chartWind"></canvas></div></div>
-  <div class="chart-box"><h2>風向</h2><div class="chart-wrap"><canvas id="chartWindDir"></canvas></div></div>
-  <div class="chart-box"><h2>照度</h2><div class="chart-wrap"><canvas id="chartLight"></canvas></div></div>
-  <div class="chart-box"><h2>UV指数</h2><div class="chart-wrap"><canvas id="chartUV"></canvas></div></div>
-  <div class="chart-box"><h2>大気圧</h2><div class="chart-wrap"><canvas id="chartPress"></canvas></div></div>
+  <div class="chart-box"><h2>気温 <label style="font-size:.7rem;font-weight:400;margin-left:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" class="toggle-switch" id="dewToggle"> 露点</label><button class="tbl-btn" data-chart="chartTemp" title="データ表"><span class="material-symbols-outlined">table_rows</span></button></h2><div class="chart-wrap"><canvas id="chartTemp"></canvas></div></div>
+  <div class="chart-box"><h2>湿度<button class="tbl-btn" data-chart="chartHum" title="データ表"><span class="material-symbols-outlined">table_rows</span></button></h2><div class="chart-wrap"><canvas id="chartHum"></canvas></div></div>
+  <div class="chart-box"><h2>雨量<button class="tbl-btn" data-chart="chartRain" title="データ表"><span class="material-symbols-outlined">table_rows</span></button></h2><div class="chart-wrap"><canvas id="chartRain"></canvas></div></div>
+  <div class="chart-box"><h2>風速<button class="tbl-btn" data-chart="chartWind" title="データ表"><span class="material-symbols-outlined">table_rows</span></button></h2><div class="chart-wrap"><canvas id="chartWind"></canvas></div></div>
+  <div class="chart-box"><h2>風向<button class="tbl-btn" data-chart="chartWindDir" title="データ表"><span class="material-symbols-outlined">table_rows</span></button></h2><div class="chart-wrap"><canvas id="chartWindDir"></canvas></div></div>
+  <div class="chart-box"><h2>照度<button class="tbl-btn" data-chart="chartLight" title="データ表"><span class="material-symbols-outlined">table_rows</span></button></h2><div class="chart-wrap"><canvas id="chartLight"></canvas></div></div>
+  <div class="chart-box"><h2>UV指数<button class="tbl-btn" data-chart="chartUV" title="データ表"><span class="material-symbols-outlined">table_rows</span></button></h2><div class="chart-wrap"><canvas id="chartUV"></canvas></div></div>
+  <div class="chart-box"><h2>大気圧<button class="tbl-btn" data-chart="chartPress" title="データ表"><span class="material-symbols-outlined">table_rows</span></button></h2><div class="chart-wrap"><canvas id="chartPress"></canvas></div></div>
+</div>
+
+<div class="data-overlay" id="dataOverlay">
+  <div class="data-modal">
+    <div class="data-modal-head">
+      <h3 id="dataModalTitle"></h3>
+      <button class="icon-btn" id="dataModalClose"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="data-modal-body">
+      <table class="data-tbl" id="dataModalTable"></table>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1368,6 +1440,98 @@ function loadExtremes() {
 loadExtremes();
 // 5分ごとに更新
 setInterval(loadExtremes, 300000);
+
+// --- データ表オーバーレイ ---
+const chartMap = {
+  chartTemp, chartHum, chartRain, chartWind, chartWindDir, chartLight, chartUV, chartPress
+};
+const dataOverlay = document.getElementById('dataOverlay');
+const dataModalTitle = document.getElementById('dataModalTitle');
+const dataModalTable = document.getElementById('dataModalTable');
+
+function fmtDt(d) {
+  if (!(d instanceof Date)) d = new Date(d);
+  const M = String(d.getMonth()+1).padStart(2,'0');
+  const D = String(d.getDate()).padStart(2,'0');
+  const h = String(d.getHours()).padStart(2,'0');
+  const m = String(d.getMinutes()).padStart(2,'0');
+  const s = String(d.getSeconds()).padStart(2,'0');
+  return `${d.getFullYear()}/${M}/${D} ${h}:${m}:${s}`;
+}
+
+function fmtVal(v) {
+  if (v == null) return '';
+  return typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(2)) : String(v);
+}
+
+function openDataTable(chartId) {
+  const chart = chartMap[chartId];
+  if (!chart) return;
+  const datasets = chart.data.datasets;
+  // Merge all timestamps
+  const timeSet = new Set();
+  datasets.forEach(ds => {
+    if (ds.hidden) return;
+    ds.data.forEach(pt => {
+      const t = pt.x instanceof Date ? pt.x.getTime() : (typeof pt.x === 'number' ? pt.x : new Date(pt.x).getTime());
+      timeSet.add(t);
+    });
+  });
+  const times = Array.from(timeSet).sort((a, b) => b - a); // newest first
+  const visDs = datasets.filter(ds => !ds.hidden);
+
+  // Build lookup per dataset
+  const lookups = visDs.map(ds => {
+    const map = new Map();
+    ds.data.forEach(pt => {
+      const t = pt.x instanceof Date ? pt.x.getTime() : (typeof pt.x === 'number' ? pt.x : new Date(pt.x).getTime());
+      map.set(t, pt.y);
+    });
+    return map;
+  });
+
+  // Title
+  const titleEl = document.querySelector(`[data-chart="${chartId}"]`).closest('h2');
+  const titleText = titleEl.childNodes[0].textContent.trim();
+  dataModalTitle.textContent = titleText + ' データ一覧';
+
+  // Build table HTML
+  let html = '<thead><tr><th>日時</th>';
+  visDs.forEach(ds => { html += `<th>${ds.label}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  const maxRows = 2000;
+  const len = Math.min(times.length, maxRows);
+  for (let i = 0; i < len; i++) {
+    html += `<tr><td>${fmtDt(times[i])}</td>`;
+    lookups.forEach(map => {
+      html += `<td>${fmtVal(map.get(times[i]))}</td>`;
+    });
+    html += '</tr>';
+  }
+  if (times.length > maxRows) {
+    html += `<tr><td colspan="${visDs.length + 1}" style="text-align:center;color:var(--md-sys-color-on-surface-variant)">... ${times.length - maxRows}件省略</td></tr>`;
+  }
+  html += '</tbody>';
+  dataModalTable.innerHTML = html;
+
+  dataOverlay.classList.add('open');
+}
+
+function closeDataTable() {
+  dataOverlay.classList.remove('open');
+}
+
+document.querySelectorAll('.tbl-btn[data-chart]').forEach(btn => {
+  btn.addEventListener('click', () => openDataTable(btn.dataset.chart));
+});
+document.getElementById('dataModalClose').addEventListener('click', closeDataTable);
+dataOverlay.addEventListener('click', e => {
+  if (e.target === dataOverlay) closeDataTable();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && dataOverlay.classList.contains('open')) closeDataTable();
+});
 
 // --- ダークモード切替検知 ---
 darkMQ.addEventListener('change', () => {
