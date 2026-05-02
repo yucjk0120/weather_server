@@ -160,6 +160,49 @@ def _m_2026_05_02_001(conn: sqlite3.Connection) -> None:
           f"from {len(virtuals)} virtual 0.1mm events")
 
 
+@migration(
+    "2026-05-02_002_null_out_of_range_sensor_values",
+    "NULL out sensor values (temperature/humidity/wind/pressure/etc) "
+    "that fall outside their physical valid range; preserves the record itself.",
+)
+def _m_2026_05_02_002(conn: sqlite3.Connection) -> None:
+    """物理的にあり得ないセンサー値を NULL に置換（レコードは残す）。
+    新規 POST は Pydantic で同じ範囲が検証済みなので、この migration は既存
+    データの掃除目的。範囲は app/models.py の WeatherInput と一致させること。
+    """
+    constraints: list[tuple[str, float | None, float | None]] = [
+        ("temperature", -60.0, 70.0),
+        ("humidity", 0.0, 100.0),
+        ("rainfall_total", 0.0, None),
+        ("wind_dir", 0.0, 360.0),
+        ("wind_avg", 0.0, 200.0),
+        ("wind_gust", 0.0, 200.0),
+        ("illuminance", 0.0, 200000.0),
+        ("uv_index", 0.0, 20.0),
+        ("pressure", 800.0, 1100.0),
+    ]
+
+    total_nulled = 0
+    for field, lo, hi in constraints:
+        clauses: list[str] = []
+        if lo is not None:
+            clauses.append(f"{field} < {lo}")
+        if hi is not None:
+            clauses.append(f"{field} > {hi}")
+        cond = " OR ".join(clauses)
+        cur = conn.execute(
+            f"UPDATE weather_records SET {field} = NULL "
+            f"WHERE {field} IS NOT NULL AND ({cond})"
+        )
+        affected = cur.rowcount
+        if affected:
+            print(f"    {field}: nulled {affected} out-of-range values")
+            total_nulled += affected
+    conn.commit()
+    if total_nulled == 0:
+        print("    no out-of-range values found")
+
+
 # ============================================================================
 # 今後の追加例 (テンプレート):
 #
