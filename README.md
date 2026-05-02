@@ -353,23 +353,27 @@ rate(t) = (過去10分内の仮想0.1mmイベント数) × 0.1 × 6   [mm/h]
 ロジック変更（雨量計算式・新カラム追加など）に伴って既存 DB を変換する場合、
 [`scripts/migrate.py`](scripts/migrate.py) を使う。
 
+**コンテナ内で実行する**（DBファイルはコンテナ内 root 所有のためホスト直実行は権限不足になる）:
+
 ```bash
 # 適用済み・未適用の確認
-python3 scripts/migrate.py --list
+docker compose exec weather-server python3 /app/scripts/migrate.py --list
 
 # 適用予定の表示（書き込みなし）
-python3 scripts/migrate.py --dry-run
+docker compose exec weather-server python3 /app/scripts/migrate.py --dry-run
 
 # 実行（自動バックアップ付き）
-python3 scripts/migrate.py
+docker compose exec weather-server python3 /app/scripts/migrate.py
 ```
+
+`scripts/` は `docker-compose.yml` でボリュームマウントされているのでコンテナ再起動不要。
 
 仕組み:
 
 - 各マイグレーションは ID で識別され、`_schema_migrations` テーブルに記録
 - 適用済みのものは2回目以降スキップ（冪等）
 - 実行前に `data/weather.bak.migrate.<timestamp>.db` 形式で自動バックアップ
-- 標準ライブラリの `sqlite3` のみ使用するためホスト側で直接実行可能（コンテナに入る必要なし）
+- 標準ライブラリの `sqlite3` のみ使用、追加パッケージ不要
 
 新しいマイグレーションを追加する場合、[`scripts/migrate.py`](scripts/migrate.py) に
 `@migration("YYYY-MM-DD_NNN_short_name", "説明")` デコレータ付きの関数を追記するだけ。
@@ -377,9 +381,9 @@ python3 scripts/migrate.py
 本番デプロイ手順:
 
 ```bash
-git pull                         # 新コード取得
-python3 scripts/migrate.py       # DB 変換（自動バックアップ）
-docker compose up -d --build     # アプリ再構築・再起動
+git pull                                                                   # 新コード取得
+docker compose up -d --build                                               # アプリ再構築・再起動
+docker compose exec weather-server python3 /app/scripts/migrate.py         # DB 変換（自動バックアップ）
 ```
 
 ---

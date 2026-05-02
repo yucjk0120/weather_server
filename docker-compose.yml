@@ -7,4 +7,5 @@ services:
       - ./data:/app/data
       - ./app/templates:/app/app/templates
       - ./app/static:/app/app/static
+      - ./scripts:/app/scripts
     restart: unless-stopped
