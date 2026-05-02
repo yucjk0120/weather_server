@@ -106,7 +106,7 @@ Content-Type: application/json
 
 **エラー時: `422 Unprocessable Entity`**
 
-必須フィールドの欠落や型不一致の場合。
+必須フィールド (`station_id`, `recorded_at`) の欠落や型不一致の場合。
 
 ```json
 {
@@ -119,6 +119,32 @@ Content-Type: application/json
   ]
 }
 ```
+
+**異常値検出時（DB登録なし）: `200 OK`**
+
+センサー値が物理的に妥当な範囲外（例: temperature=69.5°C, humidity=150%）、
+または降水量が異常な見かけ強度（>100 mm/h、装置リセット由来など）の場合、
+**サーバ側で破棄**される。デバイス側はリトライ不要。
+
+```json
+{
+  "status": "rejected",
+  "reason": "validation failed",
+  "errors": [...]
+}
+```
+
+センサー値の物理範囲（範囲外で破棄）:
+
+| フィールド | 範囲 |
+| ---- | ---- |
+| `temperature` | `[-60, 70]` °C |
+| `humidity` | `[0, 100]` % |
+| `pressure` | `[800, 1100]` hPa |
+| `wind_dir` | `[0, 360]` ° |
+| `wind_avg` / `wind_gust` | `[0, 200]` m/s |
+| `illuminance` | `[0, 200000]` lux |
+| `uv_index` | `[0, 20]` |
 
 ---
 

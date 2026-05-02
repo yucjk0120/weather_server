@@ -1,4 +1,5 @@
 data/*.db
+data/*.bak*
 __pycache__/
 *.pyc
 .claude/

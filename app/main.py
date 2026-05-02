@@ -4,14 +4,20 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
 from app.database import get_db, init_db
 from app.models import WeatherInput, WeatherRecord
-from app.rainfall import backfill_rainfall_rate, calc_rainfall
+from app.rainfall import (
+    MAX_APPARENT_RATE,
+    backfill_rainfall_rate,
+    calc_rainfall,
+    is_rainfall_anomaly,
+)
 
 # SSE: 新規データを通知するためのイベント
 _sse_clients: list[asyncio.Queue] = []
@@ -37,6 +43,20 @@ if _static_dir.is_dir():
 templates = Jinja2Templates(
     directory=str(Path(__file__).parent / "templates")
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_handler(request: Request, exc: RequestValidationError):
+    """POST /api/weather のセンサー値範囲外などは 200 OK + 'rejected' で応答（DB登録なし）。
+    他エンドポイントは従来通り 422。
+    """
+    if request.method == "POST" and request.url.path == "/api/weather":
+        return JSONResponse(
+            status_code=200,
+            content={"status": "rejected", "reason": "validation failed",
+                     "errors": exc.errors()},
+        )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 # --- HTML ---
@@ -65,6 +85,20 @@ async def service_worker():
 async def post_weather(data: WeatherInput):
     db = await get_db()
     try:
+        # 異常検知: rainfall_total の見かけ降水強度が閾値超 → 装置リセット等として登録スキップ
+        # 応答は 200 OK + 'rejected'。デバイス側のリトライを誘発しない。
+        if await is_rainfall_anomaly(data.rainfall_total, data.recorded_at, db):
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "rejected",
+                    "reason": (
+                        f"rainfall_total apparent rate exceeds "
+                        f"{MAX_APPARENT_RATE} mm/h (suspected counter restoration)"
+                    ),
+                },
+            )
+
         delta, rate = await calc_rainfall(data.rainfall_total, data.recorded_at, db)
 
         await db.execute(

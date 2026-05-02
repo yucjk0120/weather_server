@@ -1166,6 +1166,9 @@ function applyTimeAxis(hours) {
 }
 
 // --- データ操作 ---
+// 積算雨量 = sum(rainfall_delta)（実値ベース）
+// ※ rainfall_delta はサーバ側で異常値（apparent rate > 100 mm/h）を除外済み。
+//   グラフは Chart.js が点間を線形補間するため、ギャップ前後の delta もなだらかに表示される。
 let rainAccum = 0;
 let rainLastDay = -1;
 // ダッシュボード用24h雨量（グラフ範囲に依存しない）
@@ -1353,7 +1356,7 @@ function connectSSE() {
   const es = new EventSource('/api/weather/stream');
   es.addEventListener('weather', e => {
     const r = JSON.parse(e.data);
-    // ダッシュボード用雨量を更新
+    // ダッシュボード用雨量を更新（実値ベース）
     const sseDay = new Date(r.recorded_at * 1000).getDate();
     if (dashRainLastDay !== -1 && sseDay !== dashRainLastDay) dashRain24h = 0;
     dashRainLastDay = sseDay;
