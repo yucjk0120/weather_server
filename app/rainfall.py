@@ -196,6 +196,47 @@ async def backfill_rainfall_rate(db: aiosqlite.Connection) -> None:
     await update_recent_rates(db, row["t"])
 
 
+async def recompute_after_deletion(
+    db: aiosqlite.Connection,
+    deleted_time: float,
+    station_id: str,
+) -> None:
+    """削除でデータ連続性が崩れた箇所を補正する。
+
+    削除点の直後レコードは、いまや削除された前任レコードの rainfall_total を基準に
+    rainfall_delta が計算されていたため、新しい前任レコードを基準に再計算する。
+    その後、全レコードの瞬間雨量(rainfall_rate)を再計算する。
+    """
+    # 削除点の直後レコード
+    cursor = await db.execute(
+        "SELECT id, recorded_at, rainfall_total FROM weather_records "
+        "WHERE station_id = ? AND recorded_at > ? ORDER BY recorded_at LIMIT 1",
+        (station_id, deleted_time),
+    )
+    nxt = await cursor.fetchone()
+    if nxt is not None and nxt["rainfall_total"] is not None:
+        # 直後レコードの新しい前任レコード
+        cursor = await db.execute(
+            "SELECT rainfall_total FROM weather_records "
+            "WHERE station_id = ? AND recorded_at < ? "
+            "ORDER BY recorded_at DESC LIMIT 1",
+            (station_id, nxt["recorded_at"]),
+        )
+        prev = await cursor.fetchone()
+        if prev is None or prev["rainfall_total"] is None:
+            new_delta = 0.0
+        else:
+            d = nxt["rainfall_total"] - prev["rainfall_total"]
+            new_delta = d if d > 0 else 0.0  # カウンタリセットは 0
+        await db.execute(
+            "UPDATE weather_records SET rainfall_delta = ? WHERE id = ?",
+            (new_delta, nxt["id"]),
+        )
+
+    # delta が変わった可能性があるので全 rate を再計算
+    await recompute_all_rates(db)
+
+
 async def recompute_all_rates(
     db: aiosqlite.Connection,
     batch_size: int = 5000,

@@ -415,6 +415,16 @@ header h1 { font-size: 1.375rem; font-weight: 400; letter-spacing: 0; flex: 1; }
   white-space: nowrap;
 }
 .data-tbl tbody tr:hover { background: color-mix(in srgb, var(--md-sys-color-primary) 6%, transparent); }
+.data-tbl td:last-child { text-align: center; }
+.row-del {
+  font-family: inherit; font-size: .7rem; line-height: 1;
+  padding: 3px 8px; border-radius: 12px; cursor: pointer;
+  color: var(--md-sys-color-error);
+  background: transparent;
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+.row-del:hover { background: color-mix(in srgb, var(--md-sys-color-error) 10%, transparent); }
+.row-del:disabled { opacity: .5; cursor: default; }
 </style>
 </head>
 <body>
@@ -692,7 +702,9 @@ function updateCurrent(r) {
     hDrop.setAttribute('stroke', hc);
   }
   // 雨量 — 円柱ゲージ(24h積算) + 瞬間雨量
-  document.getElementById('cur-rain').textContent = fmt(r.rainfall_rate);
+  // 瞬間雨量は最後に計算された値を表示（最新レコードが未計算(NULL)なら前回値を保持）
+  if (r.rainfall_rate != null) lastCalcRainRate = r.rainfall_rate;
+  document.getElementById('cur-rain').textContent = fmt(lastCalcRainRate);
   const r24 = dashRain24h;
   const cylText = document.getElementById('rain-cyl-text');
   if (cylText) cylText.textContent = r24.toFixed(1);
@@ -1171,6 +1183,10 @@ function applyTimeAxis(hours) {
 //   グラフは Chart.js が点間を線形補間するため、ギャップ前後の delta もなだらかに表示される。
 let rainAccum = 0;
 let rainLastDay = -1;
+// アイコン表示用: 最後に計算された瞬間雨量（NULL のレコードでは前回値を保持）
+let lastCalcRainRate = null;
+// データ表の削除用: 表示時刻(ms) → レコード ID
+const recordIdByTime = new Map();
 // ダッシュボード用24h雨量（グラフ範囲に依存しない）
 let dashRain24h = 0;
 let dashRainLastDay = -1;
@@ -1180,10 +1196,14 @@ function clearCharts() {
   allCharts.forEach(c => c.data.datasets.forEach(ds => { ds.data = []; }));
   rainAccum = 0;
   rainLastDay = -1;
+  lastCalcRainRate = null;
+  recordIdByTime.clear();
 }
 
 function pushPoint(r) {
   const t = ts(r.recorded_at);
+  if (r.id != null) recordIdByTime.set(t.getTime(), r.id);
+  if (r.rainfall_rate != null) lastCalcRainRate = r.rainfall_rate;
   // 24時間積算雨量（日付変更でリセット）
   const day = t.getDate();
   if (rainLastDay !== -1 && day !== rainLastDay) rainAccum = 0;
@@ -1501,7 +1521,7 @@ function openDataTable(chartId) {
   // Build table HTML
   let html = '<thead><tr><th>日時</th>';
   visDs.forEach(ds => { html += `<th>${ds.label}</th>`; });
-  html += '</tr></thead><tbody>';
+  html += '<th>操作</th></tr></thead><tbody>';
 
   const maxRows = 2000;
   const len = Math.min(times.length, maxRows);
@@ -1510,10 +1530,16 @@ function openDataTable(chartId) {
     lookups.forEach(map => {
       html += `<td>${fmtVal(map.get(times[i]))}</td>`;
     });
+    const id = recordIdByTime.get(times[i]);
+    if (id != null) {
+      html += `<td><button class="row-del" data-id="${id}" title="この時刻の測定レコードを削除">削除</button></td>`;
+    } else {
+      html += '<td></td>';
+    }
     html += '</tr>';
   }
   if (times.length > maxRows) {
-    html += `<tr><td colspan="${visDs.length + 1}" style="text-align:center;color:var(--md-sys-color-on-surface-variant)">... ${times.length - maxRows}件省略</td></tr>`;
+    html += `<tr><td colspan="${visDs.length + 2}" style="text-align:center;color:var(--md-sys-color-on-surface-variant)">... ${times.length - maxRows}件省略</td></tr>`;
   }
   html += '</tbody>';
   dataModalTable.innerHTML = html;
@@ -1527,6 +1553,27 @@ function closeDataTable() {
 
 document.querySelectorAll('.tbl-btn[data-chart]').forEach(btn => {
   btn.addEventListener('click', () => openDataTable(btn.dataset.chart));
+});
+// データ表の行削除（同時送信レコードごと削除 → サーバ側で delta/瞬間雨量を再計算）
+dataModalTable.addEventListener('click', e => {
+  const btn = e.target.closest('.row-del');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (!id) return;
+  if (!confirm('この時刻に送られた測定値（レコード）をすべて削除します。よろしいですか？')) return;
+  btn.disabled = true;
+  fetch(`/api/weather/${id}`, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(res => {
+      if (res.status === 'deleted') {
+        closeDataTable();
+        loadData(currentRangeHours); // グラフ・データ表を再読込
+      } else {
+        alert('削除に失敗しました');
+        btn.disabled = false;
+      }
+    })
+    .catch(() => { alert('削除に失敗しました'); btn.disabled = false; });
 });
 document.getElementById('dataModalClose').addEventListener('click', closeDataTable);
 dataOverlay.addEventListener('click', e => {

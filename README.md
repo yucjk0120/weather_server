@@ -140,7 +140,8 @@ weather_server/
 │   └── insert_test_data.py     # テストデータ投入スクリプト
 │
 └── docs/
-    └── api-spec-for-device.md  # デバイス開発向け API 仕様書
+    ├── api-spec-for-device.md     # デバイス（POST）向け API 仕様書
+    └── api-spec-for-webclient.md  # Web クライアント（GET / SSE）向け API 仕様書
 ```
 
 ---
@@ -248,6 +249,8 @@ docker-compose.yml
 | `GET` | `/api/weather/latest` | `since`, `until`, `limit`, `max_points` | 期間指定取得（間引き対応） |
 | `GET` | `/api/weather/extremes` | `days`, `tz_offset` | 日別極値（直近 N 日） |
 | `GET` | `/api/weather/stream` | — | SSE: 新規データを `event: weather` で配信 |
+
+詳細: [`docs/api-spec-for-webclient.md`](docs/api-spec-for-webclient.md)
 
 ### 静的・PWA
 

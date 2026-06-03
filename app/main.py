@@ -17,6 +17,7 @@ from app.rainfall import (
     backfill_rainfall_rate,
     calc_rainfall,
     is_rainfall_anomaly,
+    recompute_after_deletion,
 )
 
 # SSE: 新規データを通知するためのイベント
@@ -155,6 +156,44 @@ async def post_weather(data: WeatherInput):
 
     _notify_sse(record)
     return record
+
+
+@app.delete("/api/weather/{record_id}")
+async def delete_weather(record_id: int):
+    """指定 ID のレコードを削除する。
+
+    同時に送られた測定値（同一 station_id・recorded_at のレコード）はまとめて削除する。
+    1 レコードに全センサー値が入っているため、これで「その時刻の測定値すべて」が消える。
+    削除後は後続レコードの rainfall_delta と全レコードの瞬間雨量を再計算する。
+    """
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT recorded_at, station_id FROM weather_records WHERE id = ?",
+            (record_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return JSONResponse(status_code=404, content={"status": "not_found"})
+
+        rec_time = row["recorded_at"]
+        station = row["station_id"]
+
+        # 同一 station_id・recorded_at（同時送信）のレコードをまとめて削除
+        cursor = await db.execute(
+            "DELETE FROM weather_records WHERE recorded_at = ? AND station_id = ?",
+            (rec_time, station),
+        )
+        deleted = cursor.rowcount
+        await db.commit()
+
+        # 後続レコードの delta 補正 + 全 rate 再計算
+        await recompute_after_deletion(db, rec_time, station)
+        await db.commit()
+    finally:
+        await db.close()
+
+    return {"status": "deleted", "deleted": deleted, "recorded_at": rec_time}
 
 
 _BUCKET_AVG_SQL = """
