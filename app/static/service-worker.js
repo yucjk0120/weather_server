@@ -1,5 +1,5 @@
 // Service Worker for 気象ステーション PWA
-const CACHE_NAME = 'weather-station-v1';
+const CACHE_NAME = 'weather-station-v2';
 
 // App shell: cache on install
 const SHELL_ASSETS = [
