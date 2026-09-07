@@ -198,6 +198,10 @@ header h1 { font-size: 1.375rem; font-weight: 400; letter-spacing: 0; flex: 1; }
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  position: sticky;
+  top: 64px;
+  z-index: 9;
+  background: var(--md-sys-color-background);
 }
 .range-bar::-webkit-scrollbar { display: none; }
 
@@ -208,6 +212,10 @@ header h1 { font-size: 1.375rem; font-weight: 400; letter-spacing: 0; flex: 1; }
   justify-content: center;
   gap: 4px;
   padding: 4px 16px;
+  position: sticky;
+  top: 112px;
+  z-index: 9;
+  background: var(--md-sys-color-background);
 }
 .nav-range {
   font-size: .85rem;
@@ -221,6 +229,10 @@ header h1 { font-size: 1.375rem; font-weight: 400; letter-spacing: 0; flex: 1; }
   padding: 2px 4px 8px;
   font-size: .7rem;
   color: var(--md-sys-color-on-surface-variant);
+  position: sticky;
+  top: 148px;
+  z-index: 9;
+  background: var(--md-sys-color-background);
 }
 
 /* === Chart Grid === */
@@ -1182,7 +1194,6 @@ function applyTimeAxis(hours) {
 // ※ rainfall_delta はサーバ側で異常値（apparent rate > 100 mm/h）を除外済み。
 //   グラフは Chart.js が点間を線形補間するため、ギャップ前後の delta もなだらかに表示される。
 let rainAccum = 0;
-let rainLastDay = -1;
 // アイコン表示用: 最後に計算された瞬間雨量（NULL のレコードでは前回値を保持）
 let lastCalcRainRate = null;
 // データ表の削除用: 表示時刻(ms) → レコード ID
@@ -1195,7 +1206,6 @@ let dashRainInited = false;
 function clearCharts() {
   allCharts.forEach(c => c.data.datasets.forEach(ds => { ds.data = []; }));
   rainAccum = 0;
-  rainLastDay = -1;
   lastCalcRainRate = null;
   recordIdByTime.clear();
 }
@@ -1204,10 +1214,6 @@ function pushPoint(r) {
   const t = ts(r.recorded_at);
   if (r.id != null) recordIdByTime.set(t.getTime(), r.id);
   if (r.rainfall_rate != null) lastCalcRainRate = r.rainfall_rate;
-  // 24時間積算雨量（日付変更でリセット）
-  const day = t.getDate();
-  if (rainLastDay !== -1 && day !== rainLastDay) rainAccum = 0;
-  rainLastDay = day;
   if (r.rainfall_delta != null) rainAccum += r.rainfall_delta;
 
   chartTemp.data.datasets[0].data.push({ x: t, y: r.temperature });
@@ -1326,10 +1332,17 @@ function loadData(hours) {
       if (data.length) {
         data.forEach(pushPoint);
       }
-      // 初回ロード時: チャート雨量からダッシュ用雨量を初期化
-      if (!dashRainInited) {
-        dashRain24h = rainAccum;
-        dashRainLastDay = rainLastDay;
+      // 初回ロード時: ダッシュ用24h雨量を初期化
+      if (!dashRainInited && data.length) {
+        const lastRec = data[data.length - 1];
+        dashRainLastDay = new Date(lastRec.recorded_at * 1000).getDate();
+        // 最新日のdeltaのみ合計
+        dashRain24h = 0;
+        for (const d of data) {
+          const day = new Date(d.recorded_at * 1000).getDate();
+          if (day !== dashRainLastDay) { dashRain24h = 0; }
+          if (d.rainfall_delta != null) dashRain24h += d.rainfall_delta;
+        }
         dashRainInited = true;
       }
       updateCharts();

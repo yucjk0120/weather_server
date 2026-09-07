@@ -1,6 +1,8 @@
+import os
+
 import aiosqlite
 
-DB_PATH = "/app/data/weather.db"
+DB_PATH = os.environ.get("DB_PATH", "/app/data/weather.db")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS weather_records (
