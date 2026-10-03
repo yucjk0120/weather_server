@@ -1198,6 +1198,8 @@ let rainAccum = 0;
 let lastCalcRainRate = null;
 // データ表の削除用: 表示時刻(ms) → レコード ID
 const recordIdByTime = new Map();
+// 外部公開（Cloudflare Tunnel 経由）は閲覧のみ: 削除操作を出さない（サーバ側でも 403）
+const READ_ONLY = {{ 'true' if read_only else 'false' }};
 // ダッシュボード用24h雨量（グラフ範囲に依存しない）
 let dashRain24h = 0;
 let dashRainLastDay = -1;
@@ -1534,7 +1536,8 @@ function openDataTable(chartId) {
   // Build table HTML
   let html = '<thead><tr><th>日時</th>';
   visDs.forEach(ds => { html += `<th>${ds.label}</th>`; });
-  html += '<th>操作</th></tr></thead><tbody>';
+  if (!READ_ONLY) html += '<th>操作</th>';
+  html += '</tr></thead><tbody>';
 
   const maxRows = 2000;
   const len = Math.min(times.length, maxRows);
@@ -1543,16 +1546,18 @@ function openDataTable(chartId) {
     lookups.forEach(map => {
       html += `<td>${fmtVal(map.get(times[i]))}</td>`;
     });
-    const id = recordIdByTime.get(times[i]);
-    if (id != null) {
-      html += `<td><button class="row-del" data-id="${id}" title="この時刻の測定レコードを削除">削除</button></td>`;
-    } else {
-      html += '<td></td>';
+    if (!READ_ONLY) {
+      const id = recordIdByTime.get(times[i]);
+      if (id != null) {
+        html += `<td><button class="row-del" data-id="${id}" title="この時刻の測定レコードを削除">削除</button></td>`;
+      } else {
+        html += '<td></td>';
+      }
     }
     html += '</tr>';
   }
   if (times.length > maxRows) {
-    html += `<tr><td colspan="${visDs.length + 2}" style="text-align:center;color:var(--md-sys-color-on-surface-variant)">... ${times.length - maxRows}件省略</td></tr>`;
+    html += `<tr><td colspan="${visDs.length + (READ_ONLY ? 1 : 2)}"style="text-align:center;color:var(--md-sys-color-on-surface-variant)">... ${times.length - maxRows}件省略</td></tr>`;
   }
   html += '</tbody>';
   dataModalTable.innerHTML = html;

@@ -37,6 +37,39 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Weather Station API", lifespan=lifespan)
 
+
+# --- 外部公開（Cloudflare Tunnel）: 閲覧のみ ---
+# トンネル経由のリクエストには Cloudflare エッジが Cf-Connecting-Ip を付与する（クライアント側で除去不可）。
+# これがあれば外部アクセスとみなし、参照系以外のメソッドを拒否する。
+# Tailscale / LAN からの直接アクセスには付かないので、従来通り POST / DELETE できる。
+_TUNNEL_HEADER = "cf-connecting-ip"
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def _via_tunnel(request: Request) -> bool:
+    return _TUNNEL_HEADER in request.headers
+
+
+class TunnelReadOnlyMiddleware:
+    """純粋 ASGI ミドルウェア（SSE のストリーミングに介在しないよう BaseHTTPMiddleware は使わない）。"""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["method"] not in _SAFE_METHODS:
+            if any(k == _TUNNEL_HEADER.encode() for k, _ in scope["headers"]):
+                response = JSONResponse(
+                    status_code=403,
+                    content={"detail": "read-only: external access cannot modify data"},
+                )
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(TunnelReadOnlyMiddleware)
+
 _static_dir = Path(__file__).parent / "static"
 if _static_dir.is_dir():
     app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
@@ -65,7 +98,9 @@ async def _validation_handler(request: Request, exc: RequestValidationError):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+    return templates.TemplateResponse(
+        request, "index.html", {"read_only": _via_tunnel(request)}
+    )
 
 
 @app.get("/service-worker.js")

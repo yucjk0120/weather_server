@@ -28,6 +28,17 @@
 | ベースURL例 | `http://100.x.x.x:8765` |
 | 認証 | なし（VPN 越しの利用前提） |
 
+### 外部公開（Cloudflare Tunnel 経由）
+
+| 項目 | 値 |
+| ---- | ---- |
+| プロトコル | HTTPS |
+| ベースURL例 | `https://weather.example.com` |
+| 認証 | なし（閲覧のみ） |
+| 制限 | `GET` / `HEAD` / `OPTIONS` 以外は `403 {"detail": "read-only: external access cannot modify data"}` |
+
+トンネル経由かどうかは Cloudflare が付与する `Cf-Connecting-Ip` ヘッダーの有無で判定する。
+
 ---
 
 ## 共通
@@ -383,6 +394,7 @@ curl -N http://100.x.x.x:8765/api/weather/stream
 
 | ステータス | 発生条件 | 形式 |
 | ---- | ---- | ---- |
+| `403 Forbidden` | Cloudflare Tunnel 経由での `GET` / `HEAD` / `OPTIONS` 以外のリクエスト | `{"detail":"read-only: external access cannot modify data"}` |
 | `404 Not Found` | 存在しないパス | FastAPI 標準 |
 | `422 Unprocessable Entity` | クエリパラメータの型不整合（`limit=abc` 等） | `{"detail":[...]}` |
 

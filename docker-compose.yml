@@ -9,3 +9,14 @@ services:
       - ./app/static:/app/app/static
       - ./scripts:/app/scripts
     restart: unless-stopped
+
+  # 外部公開用 Cloudflare Tunnel（.env の COMPOSE_PROFILES=tunnel で有効化）
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+    depends_on:
+      - weather-server
+    restart: unless-stopped
+    profiles: ["tunnel"]

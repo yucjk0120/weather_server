@@ -11,6 +11,7 @@ PWA 対応・SSE によるリアルタイム配信・MD3 Expressive UI・ダー�
 - [必要環境](#必要環境)
 - [初回セットアップ](#初回セットアップ)
 - [起動・停止・更新時の再起動](#起動停止更新時の再起動)
+- [外部公開（Cloudflare Tunnel）](#外部公開cloudflare-tunnel)
 - [ディレクトリ構成](#ディレクトリ構成)
 - [必要ファイル一覧](#必要ファイル一覧)
 - [内部構成](#内部構成)
@@ -101,6 +102,63 @@ docker compose logs -f      # ログを追う
 
 ---
 
+## 外部公開（Cloudflare Tunnel）
+
+`cloudflared` コンテナから Cloudflare へアウトバウンド接続し、`https://weather.example.com` のような固定 URL でダッシュボードを公開する。ルーターのポート開放は不要。
+
+### アクセス制御（外部は閲覧のみ）
+
+| 経路 | 判定 | 許可される操作 |
+|------|------|--------------|
+| Cloudflare Tunnel 経由 | `Cf-Connecting-Ip` ヘッダーあり | `GET` / `HEAD` / `OPTIONS` のみ。`POST` / `DELETE` は **403** |
+| Tailscale / LAN から `:8765` 直接 | ヘッダーなし | 全操作（デバイスの POST、データ表の削除） |
+
+- `Cf-Connecting-Ip` は Cloudflare エッジが付与し、外部クライアントが除去することはできない。
+- トンネル経由ではダッシュボードのデータ表から「操作（削除）」列も非表示になる。
+- 実装: `app/main.py` の `TunnelReadOnlyMiddleware`
+
+### セットアップ手順
+
+前提: Cloudflare アカウント、Cloudflare で DNS 管理しているドメイン。
+
+1. Cloudflare ダッシュボード → **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel** → **Cloudflared** を選び、名前（例: `weather-server`）を付けて作成
+2. コネクタのインストール画面に表示されるコマンド（`cloudflared service install eyJ...`）の `eyJ...` 部分がトンネルトークン。コピーしておく（コマンド自体は実行しない）
+3. **Public Hostname** を追加
+   - Subdomain / Domain: 公開したいホスト名（例: `weather` / `example.com`）
+   - Service Type: `HTTP`
+   - URL: `weather-server:8000`（compose ネットワーク内のサービス名とコンテナ内ポート）
+4. サーバー上で `.env` を作成してトークンを設定
+
+   ```bash
+   cp .env.example .env
+   # .env の TUNNEL_TOKEN= にトークンを貼り付け
+   ```
+
+5. 起動（`app/main.py` の閲覧専用ガードを確実に反映させるため `--build` を付ける）
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+`.env` の `COMPOSE_PROFILES=tunnel` により、以後は通常の `docker compose up -d` / `restart` / `down` で `cloudflared` も一緒に扱われる。`.env` がなければ従来通り `weather-server` のみ起動する。
+
+### 動作確認
+
+```bash
+docker compose logs cloudflared | grep -i "registered tunnel connection"   # 接続確立
+curl -s -o /dev/null -w "%{http_code}\n" https://weather.example.com/                        # 200
+curl -s -o /dev/null -w "%{http_code}\n" -X DELETE https://weather.example.com/api/weather/0 # 403
+```
+
+### 停止・更新
+
+```bash
+docker compose stop cloudflared                       # 外部公開だけ止める
+docker compose pull cloudflared && docker compose up -d  # cloudflared を最新に更新
+```
+
+---
+
 ## ディレクトリ構成
 
 ```
@@ -109,7 +167,8 @@ weather_server/
 ├── docker-compose.yml          # ポート/ボリューム/再起動ポリシー
 ├── requirements.txt            # Python 依存
 ├── .dockerignore               # ビルドコンテキスト除外
-├── .gitignore                  # Git 除外（DB 等）
+├── .gitignore                  # Git 除外（DB, .env 等）
+├── .env.example                # Cloudflare Tunnel 用 .env のひな形（.env は Git 管理外）
 ├── README.md                   # 本ファイル
 │
 ├── app/                        # アプリ本体
@@ -225,6 +284,10 @@ docker-compose.yml
     │   ├── ./app/templates:/app/app/templates
     │   └── ./app/static:/app/app/static
     └── restart: unless-stopped
+└── service: cloudflared（profile: tunnel）
+    ├── image: cloudflare/cloudflared:latest
+    ├── command: tunnel --no-autoupdate run（TUNNEL_TOKEN は .env から）
+    └── 転送先: http://weather-server:8000（ダッシュボードの Public Hostname で設定）
 ```
 
 コンテナ起動時に `uvicorn app.main:app --host 0.0.0.0 --port 8000` が実行される。
@@ -431,6 +494,8 @@ python scripts/insert_test_data.py --url http://localhost:8765 --count 60
 | 8765 にアクセスできない | `docker compose ps` でコンテナ状態確認、ポート競合の場合 `docker-compose.yml` のホスト側ポートを変更 |
 | データが表示されない | `data/weather.db` の存在確認、`scripts/insert_test_data.py` でテストデータ投入 |
 | SSE が繋がらない | リバースプロキシ（nginx 等）使用時はバッファリングを無効化（`X-Accel-Buffering: no`）、`proxy_buffering off;` |
+| 外部 URL が 502 / 1033 | `docker compose logs cloudflared` を確認。トークン誤り、または Public Hostname の URL が `weather-server:8000` になっていない |
+| 外部から削除・POST できない | 仕様（トンネル経由は閲覧のみ・403）。Tailscale / LAN の `:8765` から操作する |
 | グラフが古いまま | ハードリロード（Cmd+Shift+R）、または SW の `CACHE_NAME` を更新 |
 | `pressure` カラムがない | `_MIGRATIONS` の `ALTER TABLE ADD COLUMN pressure` が走るので再起動で自動対応 |
 | ロジック変更後 rate/delta が古い値のまま | `python3 scripts/migrate.py` で DB を新ロジックに変換 |
