@@ -1,5 +1,6 @@
 data/*.db
 data/*.bak*
+data/receiver/
 __pycache__/
 *.pyc
 .claude/

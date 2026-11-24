@@ -12,6 +12,7 @@ PWA 対応・SSE によるリアルタイム配信・MD3 Expressive UI・ダー�
 - [初回セットアップ](#初回セットアップ)
 - [起動・停止・更新時の再起動](#起動停止更新時の再起動)
 - [外部公開（Cloudflare Tunnel）](#外部公開cloudflare-tunnel)
+- [受信ブリッジ（receiver-bridge）](#受信ブリッジreceiver-bridge)
 - [ディレクトリ構成](#ディレクトリ構成)
 - [必要ファイル一覧](#必要ファイル一覧)
 - [内部構成](#内部構成)
@@ -159,6 +160,62 @@ docker compose pull cloudflared && docker compose up -d  # cloudflared を最新
 
 ---
 
+## 受信ブリッジ（receiver-bridge）
+
+気象受信機（ESP32-C3 + CC1101）をこのホストに USB でつなぎ、受信データを weather-server に登録する。受信機は 433MHz の電文を USB に流すだけで（Wi-Fi は使わない）、データの解釈・登録・受信の見張りはこのサービスが行う。
+
+```
+屋外センサ ─433MHz─▶ 受信機 ─USB─▶ receiver-bridge ─POST /api/weather─▶ weather-server
+```
+
+| 役割 | 内容 |
+|------|------|
+| 登録 | 対象センサ（`Cotech-367959`）の電文を weather-server の形式に直して登録する。センサが同じ電文を 5ms 間隔で 2 回送るので、2 つ目は捨てる。気圧は受信機の BME280 の値を付ける |
+| 送信待ち | 受信したら先に `data/receiver/outbox.db` に積み、登録できたら消す。weather-server が止まっていても消さずに再送する。4xx で拒否されたものは `dead` に移す |
+| 見張り | 受信が途絶えたら、受信機に段階的に指示を出す（下表）。どの段階で回復したかを記録する |
+| 記録 | 受信機の出力とブリッジの出来事を、時刻付きで `data/receiver/logs/receiver-YYYY-MM-DD.log` に残す（30 日分） |
+| 公開 | `http://<ホスト>:8766/status`（状態の JSON）と `http://<ホスト>:8766/logs/`（記録）を LAN に読み取り専用で出す |
+
+受信が途絶えたときの指示（センサは 16 秒ごとに送信する。正常時は 2 分を超える途切れは 2 週間に 1 回ほど）:
+
+| 途絶えてから | 指示 | 内容 |
+|------|------|------|
+| 2 分 | `KICK` | CC1101 を待機→受信に戻す（周波数の再校正つき） |
+| 3 分 | `RADIO_RESET` | CC1101 をリセット命令（SRES）で初期化し、設定し直す |
+| 4 分 | `REBOOT` | 受信機を再起動する。戻らなければ 8 → 16 → 32 分と間隔を延ばして続ける |
+| 受信機から何も届かず 90 秒 | ハードウェアリセット | シリアルの制御線で EN を引く（RST ボタンと同じ。ファームが固まっていても効く） |
+
+受信機の側にも見張りがあり、このサービスから 2 分間何も届かなければ（このサービスが止まった、USB が詰まったなど）自分で再起動する。
+
+### 有効化
+
+受信機をつないだホストの `.env` で、`COMPOSE_PROFILES` に `receiver` を足して起動する。
+
+```bash
+# .env
+COMPOSE_PROFILES=tunnel,receiver
+```
+
+```bash
+docker compose up -d --build
+```
+
+### 動作確認
+
+```bash
+docker compose logs -f receiver-bridge        # 「connected」が出れば受信機を認識している
+curl -s http://localhost:8766/status          # sensor_pkts_10min が 20 前後、outbox が 0 なら正常
+```
+
+### 仕組み上の注意
+
+- **`/dev` をそのままコンテナに見せている**のは、受信機が再起動すると USB のデバイスファイルが作り直されることがあるため。特定のファイルだけを渡すと、作り直された後に追従できない。`device_cgroup_rules` で、実際に読み書きできるのは USB シリアル（ttyACM）だけに限っている。
+- **シリアルの制御線（DTR/RTS）は、ハードウェアリセットのとき以外は触らない。** ESP32-C3 は制御線の組み合わせでリセットされるので、つないだだけで受信機の状態を壊さないようにしている。
+- 記録時刻（`recorded_at`）は、このホストが受信した時刻。
+- 受信機へのファームの書き込みは Mac につないで行う。このホストで書き込む場合は、先に `docker compose stop receiver-bridge` でポートを空ける。
+
+---
+
 ## ディレクトリ構成
 
 ```
@@ -197,6 +254,10 @@ weather_server/
 ├── scripts/
 │   ├── migrate.py              # DB マイグレーションランナー
 │   └── insert_test_data.py     # テストデータ投入スクリプト
+│
+├── receiver_bridge/            # 受信機と weather-server をつなぐブリッジ（profile: receiver）
+│   ├── Dockerfile
+│   └── bridge.py
 │
 └── docs/
     ├── api-spec-for-device.md     # デバイス（POST）向け API 仕様書
@@ -288,6 +349,14 @@ docker-compose.yml
     ├── image: cloudflare/cloudflared:latest
     ├── command: tunnel --no-autoupdate run（TUNNEL_TOKEN は .env から）
     └── 転送先: http://weather-server:8000（ダッシュボードの Public Hostname で設定）
+└── service: receiver-bridge（profile: receiver）
+    ├── build: ./receiver_bridge
+    ├── ports: 8766（状態と記録の公開）
+    ├── volumes:
+    │   ├── /dev:/dev（USB の再接続に追従）
+    │   └── ./data/receiver:/data（送信待ちと記録）
+    ├── 送信先: http://weather-server:8000/api/weather
+    └── restart: unless-stopped
 ```
 
 コンテナ起動時に `uvicorn app.main:app --host 0.0.0.0 --port 8000` が実行される。

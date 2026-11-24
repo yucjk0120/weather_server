@@ -20,3 +20,25 @@ services:
       - weather-server
     restart: unless-stopped
     profiles: ["tunnel"]
+
+  # 気象受信機 (ESP32) を USB でつないだホストで、受信データを weather-server に登録する
+  # （.env の COMPOSE_PROFILES に receiver を入れて有効化）
+  receiver-bridge:
+    build: ./receiver_bridge
+    environment:
+      - TZ=Asia/Tokyo
+      - API_URL=http://weather-server:8000/api/weather
+      - STATION_ID=ST-001
+    volumes:
+      # 受信機が再起動すると USB のデバイスファイルが作り直されることがあるので、
+      # 特定のファイルではなく /dev ごと見せて、作り直しに追従する
+      - /dev:/dev
+      - ./data/receiver:/data   # 送信待ち (outbox.db) と記録 (logs/)
+    device_cgroup_rules:
+      - "c 166:* rmw"   # 使えるのは USB シリアル (ttyACM) だけに限る
+    ports:
+      - "8766:8766"     # 状態 (/status) と記録 (/logs/) を LAN に読み取り専用で公開
+    depends_on:
+      - weather-server
+    restart: unless-stopped
+    profiles: ["receiver"]
